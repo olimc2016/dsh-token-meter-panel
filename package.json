@@ -1,90 +1,90 @@
 {
-  "name": "dsh-token-meter-panel",
-  "version": "0.2.0",
-  "description": "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage & cost panel for DeepSeek Harness (community plugin, unofficial).",
-  "type": "module",
-  "main": "lib/index.js",
-  "exports": {
-    ".": {
-      "default": "./lib/index.js"
-    },
-    "./client": "./lib/client.js",
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "lib",
-    "src",
-    "docs",
-    "cordis.patch.yml",
-    "README.md",
-    "README.en.md",
-    "CHANGELOG.md",
-    "LICENSE",
-    "THIRD-PARTY-NOTICES.md"
-  ],
-  "keywords": [
-    "dsh",
-    "dsh-plugin",
-    "deepseek-harness",
-    "token",
-    "usage",
-    "cost",
-    "billing",
-    "panel"
-  ],
-  "homepage": "https://github.com/olimc2016/dsh-token-meter-panel#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/olimc2016/dsh-token-meter-panel.git"
-  },
-  "bugs": {
-    "url": "https://github.com/olimc2016/dsh-token-meter-panel/issues"
-  },
-  "author": "oli20",
-  "engines": {
-    "node": ">=22.19.0"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-client-ui-renderer"
-      ]
-    }
-  },
-  "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.2"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.1 <0.3.0-0",
-    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.1 <0.3.0-0"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-settings": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-host-webserver": {
-      "optional": true
-    }
-  },
-  "devDependencies": {
-    "esbuild": "^0.28.2"
-  },
-  "scripts": {
-    "build": "node tools/build-client.mjs",
-    "watch": "node tools/build-client.mjs --watch",
-    "setup": "powershell -ExecutionPolicy Bypass -File tools/setup-modules.ps1",
-    "test": "node tools/verify-core.mjs && node tools/verify-zstd.mjs && node tools/verify-rates.mjs && node tools/smoke-host.mjs && node tools/smoke-client.mjs",
-    "prepublishOnly": "npm run build && npm test"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
-  },
-  "license": "MIT"
+    "name":  "dsh-token-meter-panel",
+    "version":  "0.3.0",
+    "description":  "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage \u0026 cost panel for DeepSeek Harness (community plugin, unofficial).",
+    "type":  "module",
+    "main":  "lib/index.js",
+    "exports":  {
+                    ".":  {
+                              "default":  "./lib/index.js"
+                          },
+                    "./client":  "./lib/client.js",
+                    "./cordis.patch.yml":  "./cordis.patch.yml",
+                    "./package.json":  "./package.json"
+                },
+    "files":  [
+                  "lib",
+                  "src",
+                  "docs",
+                  "cordis.patch.yml",
+                  "README.md",
+                  "README.en.md",
+                  "CHANGELOG.md",
+                  "LICENSE",
+                  "THIRD-PARTY-NOTICES.md"
+              ],
+    "keywords":  [
+                     "dsh",
+                     "dsh-plugin",
+                     "deepseek-harness",
+                     "token",
+                     "usage",
+                     "cost",
+                     "billing",
+                     "panel"
+                 ],
+    "homepage":  "https://github.com/olimc2016/dsh-token-meter-panel#readme",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/olimc2016/dsh-token-meter-panel.git"
+                   },
+    "bugs":  {
+                 "url":  "https://github.com/olimc2016/dsh-token-meter-panel/issues"
+             },
+    "author":  "oli20",
+    "engines":  {
+                    "node":  "\u003e=22.19.0"
+                },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "platform":  "web",
+                               "inject":  [
+                                              "@deepseek-ai/dsh-client-ui-layout",
+                                              "@deepseek-ai/dsh-client-ui-renderer"
+                                          ]
+                           }
+            },
+    "dependencies":  {
+                         "@deepseek-ai/schemastery":  "^3.18.2"
+                     },
+    "peerDependencies":  {
+                             "@deepseek-ai/cordis":  "^4.0.2",
+                             "@deepseek-ai/dsh-settings":  "\u003e=0.1.0-rc.1 \u003c0.3.0-0",
+                             "@deepseek-ai/dsh-host-webserver":  "\u003e=0.1.0-rc.1 \u003c0.3.0-0"
+                         },
+    "peerDependenciesMeta":  {
+                                 "@deepseek-ai/dsh-settings":  {
+                                                                   "optional":  true
+                                                               },
+                                 "@deepseek-ai/dsh-host-webserver":  {
+                                                                         "optional":  true
+                                                                     }
+                             },
+    "devDependencies":  {
+                            "esbuild":  "^0.28.2"
+                        },
+    "scripts":  {
+                    "build":  "node tools/build-client.mjs",
+                    "watch":  "node tools/build-client.mjs --watch",
+                    "setup":  "powershell -ExecutionPolicy Bypass -File tools/setup-modules.ps1",
+                    "test":  "node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
+                    "prepublishOnly":  "npm run build \u0026\u0026 npm test"
+                },
+    "publishConfig":  {
+                          "registry":  "https://registry.npmjs.org/"
+                      },
+    "license":  "MIT"
 }

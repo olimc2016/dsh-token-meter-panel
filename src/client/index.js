@@ -207,13 +207,68 @@ const card = {
   padding: '12px 13px',
   marginTop: 12,
 };
+
+/* ------------------------------------------------------------------ *
+ * 皮肤（0.3）：皮肤 = 一组「表面 token」，几何字面量写死，颜色一律基于 --dsw-*
+ *   变换（color-mix），所以深浅主题都跟着走；文字与语义色（命中/未命中/输出）
+ *   不参与皮肤化，保证任何皮肤下金额都足够清晰、三色仍可区分。
+ * ------------------------------------------------------------------ */
+const GLASS_BLUR = 'blur(22px) saturate(170%)';
+const SKINS = {
+  default: {
+    card: { ...card },
+    hero: {
+      border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px',
+      background: 'var(--dsw-alias-bg-layer-2, rgba(47,125,255,.06))',
+    },
+    panel: { border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', background: C.layer1 },
+    stat: { border: `1px solid ${C.border1}`, borderRadius: 12, background: C.layer1 },
+  },
+  glass: {
+    card: {
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 13%, transparent)',
+      borderRadius: 16,
+      padding: '12px 13px',
+      marginTop: 12,
+      background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 50%, transparent)',
+      backdropFilter: GLASS_BLUR,
+      WebkitBackdropFilter: GLASS_BLUR,
+      boxShadow: '0 10px 32px rgba(0,0,0,.22), inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent)',
+    },
+    hero: {
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 15%, transparent)',
+      borderRadius: 18,
+      padding: '14px 16px',
+      background: 'linear-gradient(150deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent), transparent 62%), color-mix(in srgb, var(--dsw-alias-bg-layer-1) 52%, transparent)',
+      backdropFilter: GLASS_BLUR,
+      WebkitBackdropFilter: GLASS_BLUR,
+      boxShadow: '0 14px 40px rgba(0,0,0,.24), inset 0 1px 0 color-mix(in srgb, #fff 24%, transparent)',
+    },
+    panel: {
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 13%, transparent)',
+      borderRadius: 16,
+      padding: '14px 16px',
+      background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 50%, transparent)',
+      backdropFilter: GLASS_BLUR,
+      WebkitBackdropFilter: GLASS_BLUR,
+      boxShadow: '0 10px 32px rgba(0,0,0,.22), inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent)',
+    },
+    stat: {
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 11%, transparent)',
+      borderRadius: 14,
+      background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 58%, transparent)',
+      boxShadow: 'inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent)',
+    },
+  },
+};
+const skinOf = (name) => SKINS[name] ?? SKINS.default;
 const swatch = (color) => ({
   width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block', flex: 'none',
 });
 
-function Stat({ label, value, unit, color, extra, t }) {
+function Stat({ label, value, unit, color, extra, t, surface }) {
   return React.createElement('div', {
-    style: { border: `1px solid ${C.border1}`, borderRadius: 12, background: C.layer1, padding: '10px 12px', minWidth: 0 },
+    style: { ...(surface ?? { border: `1px solid ${C.border1}`, borderRadius: 12, background: C.layer1 }), padding: '10px 12px', minWidth: 0 },
   }, [
     React.createElement('div', {
       key: 'k',
@@ -359,6 +414,8 @@ function TokenMeterPanel(props) {
 
   const days = data.days ?? {};
   const today = data.today;
+  const S = skinOf(data.config?.skin);
+  const glassOn = data.config?.skin === 'glass';
   const D = days[today] ?? { miss: 0, hit: 0, out: 0, calls: 0, cny: 0, hitRate: null, byHour: new Array(24).fill(0), peakCalls: 0 };
   const dayKeys = Object.keys(days).sort();
   const prevKey = dayKeys.filter((k) => k < today).pop();
@@ -465,11 +522,32 @@ function TokenMeterPanel(props) {
 
   return React.createElement('div', {
     style: {
-      height: '100%', overflow: 'auto', padding: '16px 18px 40px',
+      height: '100%', overflow: 'auto', padding: '16px 18px 40px', position: 'relative',
       color: C.label, fontFamily: 'var(--dsw-font-family, system-ui, "Microsoft YaHei UI", sans-serif)',
       fontSize: 13, boxSizing: 'border-box',
     },
   }, [
+    /* 液态玻璃：DSH 背景是纯色，backdrop-filter 没东西可折射 → 自己铺一层极光底色，
+       玻璃卡片浮在它上面，模糊才有内容，这才是"液态"的来源 */
+    glassOn
+      ? React.createElement('div', {
+        key: 'aurora',
+        'aria-hidden': 'true',
+        style: {
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden',
+          background: [
+            'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 16%, transparent)',
+            'radial-gradient(50% 32% at 14% 0%, color-mix(in srgb, var(--dsw-alias-brand-primary, #2f7dff) 55%, transparent), transparent 66%)',
+            'radial-gradient(38% 28% at 98% 6%, rgba(150,96,255,.42), transparent 70%)',
+            'radial-gradient(44% 30% at 78% 100%, rgba(0,196,178,.34), transparent 72%)',
+            'radial-gradient(32% 24% at 22% 92%, rgba(255,120,190,.22), transparent 72%)',
+          ].join(','),
+          filter: 'blur(40px) saturate(140%)',
+          transform: 'translateZ(0)',
+        },
+      })
+      : null,
+    React.createElement('div', { key: 'body', style: { position: 'relative', zIndex: 1 } }, [
     /* 头部：标题 + 时段 + 范围 + 刷新 */
     React.createElement('div', {
       key: 'head',
@@ -515,10 +593,7 @@ function TokenMeterPanel(props) {
     }, [
       React.createElement('div', {
         key: 'spend',
-        style: {
-          border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px',
-          background: 'var(--dsw-alias-bg-layer-2, rgba(47,125,255,.06))',
-        },
+        style: S.hero,
       }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
         React.createElement('div', {
@@ -610,15 +685,15 @@ function TokenMeterPanel(props) {
         key: 'stats',
         style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
       }, [
-        React.createElement(Stat, { key: '1', t, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
+        React.createElement(Stat, { key: '1', t, surface: S.stat, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
         React.createElement(Stat, {
-          key: '2', t, label: t('hitRate'),
+          key: '2', t, surface: S.stat, label: t('hitRate'),
           value: D.hitRate === null || D.hitRate === undefined ? '—' : `${D.hitRate}`,
           unit: '%',
           extra: ` · ${D.calls} ${t('calls')}`,
         }),
-        React.createElement(Stat, { key: '3', t, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
-        React.createElement(Stat, { key: '4', t, label: t('output'), color: C.out, value: fmt(D.out) }),
+        React.createElement(Stat, { key: '3', t, surface: S.stat, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
+        React.createElement(Stat, { key: '4', t, surface: S.stat, label: t('output'), color: C.out, value: fmt(D.out) }),
         /* 金额公式：把「今天的钱怎么来的」直接写出来（与官方总额一致） */
         React.createElement('div', {
           key: 'formula',
@@ -639,10 +714,7 @@ function TokenMeterPanel(props) {
       /* 第三栏：峰谷时段与峰谷价 */
       React.createElement('div', {
         key: 'rates',
-        style: {
-          border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', background: C.layer1,
-          fontSize: 11, color: C.label3, lineHeight: 1.7,
-        },
+        style: { ...S.panel, fontSize: 11, color: C.label3, lineHeight: 1.7 },
       }, [
         React.createElement('div', { key: 'h', style: { fontSize: 12, fontWeight: 650, color: C.label2 } }, t('tierTitle')),
         React.createElement('div', { key: 'tier', style: { marginTop: 4 } }, [
@@ -659,7 +731,7 @@ function TokenMeterPanel(props) {
     ]),
 
     /* 趋势 */
-    React.createElement('div', { key: 'trend', style: card }, [
+    React.createElement('div', { key: 'trend', style: S.card }, [
       React.createElement('div', {
         key: 'h',
         style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: C.label3 },
@@ -830,7 +902,7 @@ function TokenMeterPanel(props) {
 
     /* 历史（官方查询） */
     meterOfficial && historyDays.length
-      ? React.createElement('div', { key: 'hist', style: card }, [
+      ? React.createElement('div', { key: 'hist', style: S.card }, [
         React.createElement('div', {
           key: 'h',
           style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 },
@@ -867,7 +939,7 @@ function TokenMeterPanel(props) {
       : null,
 
     /* 成本构成 */
-    React.createElement('div', { key: 'split', style: card }, [
+    React.createElement('div', { key: 'split', style: S.card }, [
       React.createElement('div', {
         key: 'h',
         style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3, flexWrap: 'wrap' },
@@ -903,7 +975,7 @@ function TokenMeterPanel(props) {
     ]),
 
     /* 按会话明细 */
-    React.createElement('div', { key: 'sessions', style: card }, [
+    React.createElement('div', { key: 'sessions', style: S.card }, [
       React.createElement('div', {
         key: 'h',
         style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 },
@@ -965,7 +1037,7 @@ function TokenMeterPanel(props) {
 
     /* 本会话实时（官方投影叠加） */
     live
-      ? React.createElement('div', { key: 'live', style: card }, [
+      ? React.createElement('div', { key: 'live', style: S.card }, [
         React.createElement('div', { key: 'h', style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 } }, [
           React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('live')),
           React.createElement('span', { key: 'h', style: { flex: 1 } }),
@@ -991,6 +1063,7 @@ function TokenMeterPanel(props) {
       React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}`),
       React.createElement('div', { key: 'c' }, `${t('rateLine')}：${data.pricing?.source} （采集于 ${data.pricing?.fetchedAt}）`),
       error ? React.createElement('div', { key: 'd', style: { color: C.warn } }, `${t('failed')}：${error}`) : null,
+    ]),
     ]),
   ]);
 }
