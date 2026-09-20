@@ -572,17 +572,9 @@ function TokenMeterPanel(props) {
             style: { color: C.brand, textDecoration: 'none', whiteSpace: 'nowrap' },
           }, `${t('billingLink')} ↗`)))(),
           React.createElement('span', {
-            key: 'tg',
-            onClick: () => setShowRates((v) => !v),
-            style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
-          }, `${t('rateDetail')} ${showRates ? '▴' : '▾'}`),
-          showRates
-            ? React.createElement('div', { key: 'bd', style: { marginTop: 4 } }, [
-              `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit} + ${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss} + ${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
-              React.createElement('br', { key: 'br' }),
-              `${t('rateLine')}：${data.peakNow ? t('peak') : t('offpeak')}`,
-            ])
-            : null,
+            key: 'tier',
+            style: { color: C.label3 },
+          }, `${t('rateLine')}：${data.peakNow ? t('peak') : t('offpeak')}`),
         ]),
         budget > 0
           ? React.createElement('div', { key: 'p', style: { marginTop: 10 } }, [
@@ -618,15 +610,31 @@ function TokenMeterPanel(props) {
         key: 'stats',
         style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
       }, [
-        React.createElement(Stat, { key: '1', t, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
-        React.createElement(Stat, { key: '2', t, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
-        React.createElement(Stat, { key: '3', t, label: t('output'), color: C.out, value: fmt(D.out) }),
+        React.createElement(Stat, { key: '1', t, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
         React.createElement(Stat, {
-          key: '4', t, label: t('hitRate'),
+          key: '2', t, label: t('hitRate'),
           value: D.hitRate === null || D.hitRate === undefined ? '—' : `${D.hitRate}`,
           unit: '%',
           extra: ` · ${D.calls} ${t('calls')}`,
         }),
+        React.createElement(Stat, { key: '3', t, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
+        React.createElement(Stat, { key: '4', t, label: t('output'), color: C.out, value: fmt(D.out) }),
+        /* 金额公式：把「今天的钱怎么来的」直接写出来（与官方总额一致） */
+        React.createElement('div', {
+          key: 'formula',
+          style: {
+            gridColumn: '1 / -1', fontSize: 11.5, color: C.label3, lineHeight: 1.8,
+            borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2,
+          },
+        }, [
+          React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
+          ' = ',
+          `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit}`,
+          ' + ',
+          `${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss}`,
+          ' + ',
+          `${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
+        ]),
       ]),
       /* 第三栏：峰谷时段与峰谷价 */
       React.createElement('div', {
