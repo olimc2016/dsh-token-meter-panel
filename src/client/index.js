@@ -41,6 +41,7 @@ const zh = {
   'historyTitle': '历史（官方查询）',
   'autoSession': '浏览器登录态',
   'notConnected': '未连接',
+  'officialLoading': '正在获取官方数据…',
   'connectOfficial': '连接官方',
   'connectHint': '首次会打开官方网页，未登录请先在页面里登录，回来即自动生效',
   'localEstimate': '本地推算',
@@ -119,6 +120,7 @@ const en = {
   'historyTitle': 'History (official query)',
   'autoSession': 'browser session',
   'notConnected': 'not connected',
+  'officialLoading': 'fetching official data…',
   'connectOfficial': 'Connect',
   'connectHint': 'opens the official page; sign in there first, then come back',
   'localEstimate': 'local estimate',
@@ -387,6 +389,16 @@ function TokenMeterPanel(props) {
   // 宿主建议的刷新间隔（来自设置 refreshSeconds），拿到后接管轮询
   const [intervalSec, setIntervalSec] = React.useState(60);
   const { status, data, error, at, refresh } = useSummary(intervalSec);
+  // 官方数据是后台补齐的：首屏等它时快速重试几次（1.2s 一次，最多 8 次），
+  // 这样既不阻塞首屏，也不会让用户干等到下一个 60s 轮询
+  const officialLoading = data?.official?.reason === 'loading';
+  const [officialTries, setOfficialTries] = React.useState(0);
+  React.useEffect(() => {
+    if (!officialLoading) { if (officialTries) setOfficialTries(0); return undefined; }
+    if (officialTries >= 8) return undefined;
+    const id = setTimeout(() => { setOfficialTries((n) => n + 1); refresh(); }, 1200);
+    return () => clearTimeout(id);
+  }, [officialLoading, officialTries, refresh]);
 
   React.useEffect(() => {
     const sec = data?.config?.refreshSeconds;
@@ -642,10 +654,11 @@ function TokenMeterPanel(props) {
                 React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
               ]
               : [
-                React.createElement('span', { key: 'why' }, `${t('officialLabel')}：${off?.reason === 'disabled' ? t('officialOff')
-                  : off?.reason === 'no-credential' ? t('notConnected')
-                    : (off?.error ?? t('balanceFailed'))} `),
-                React.createElement('span', {
+                React.createElement('span', { key: 'why' }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
+                  : off?.reason === 'disabled' ? t('officialOff')
+                    : off?.reason === 'no-credential' ? t('notConnected')
+                      : (off?.error ?? t('balanceFailed'))} `),
+                off?.reason === 'loading' ? null : React.createElement('span', {
                   key: 'go',
                   onClick: () => {
                     try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ }
