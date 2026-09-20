@@ -160,10 +160,15 @@ DSH 的 `.jsonl.zstd` 是**追加写入的多帧 zstd**：
 
 官方用量（面板的主数据源）：
 
-- 今日消费、四宫格、每日趋势、今日分时、**历史表**、成本构成全部来自官方接口
-  `platform.deepseek.com/api/v0/usage/by_api_key/{cost,amount}`（与平台「用量」页同源）
-- 需要**网页登录态的 `userToken`**（不是 API Key），凭据名默认 `DEEPSEEK_PLATFORM_TOKEN`
-- 该端点非公开文档接口，官方可能改动；失败时退回本地日志并标明来源
+- **零配置**：插件会**自动读取浏览器登录态**（Edge / Chrome / Chromium / Brave 的 Local Storage 里
+  `platform.deepseek.com` 的 `userToken`），你不需要复制粘贴或配置任何东西
+  - 只读流程：把浏览器的 `Local Storage/leveldb` **复制到系统临时目录**再解析（原文件被浏览器占用），解析完立即删除；
+    **不写你的用户目录**，且**只取 `platform.deepseek.com` 这一条记录**，不外发、不落盘
+  - 读不到时（站点未登录 / 非标准 profile / 格式变动）面板显示「官方：未连接 **[连接官方]**」：
+    点一下打开官方账单页，登录后回到面板即自动生效
+- 也可手动指定：凭据名 `DEEPSEEK_PLATFORM_TOKEN`（网页登录态 `userToken`），优先级高于自动读取
+- 数据端点 `platform.deepseek.com/api/v0/usage/by_api_key/{cost,amount}`（与平台「用量」页同源）：
+  今日消费、四宫格、每日趋势、今日分时、**历史表**、成本构成都来自它
 - 只有 **按会话明细** 是官方没有的维度，仍来自本地日志（卡头标注「本地日志」）
 - 面板上有 **官方账单页 ↗**，一键跳到 `platform.deepseek.com/usage` 自己核对
 

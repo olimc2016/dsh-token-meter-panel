@@ -39,6 +39,10 @@ const zh = {
   'localShort': '本地日志',
   'yesterdayLabel': '昨天',
   'historyTitle': '历史（官方查询）',
+  'autoSession': '浏览器登录态',
+  'notConnected': '未连接',
+  'connectOfficial': '连接官方',
+  'connectHint': '首次会打开官方网页，未登录请先在页面里登录，回来即自动生效',
   'localEstimate': '本地推算',
   'diffLabel': '差',
   'officialOff': '官方用量已关闭',
@@ -113,6 +117,10 @@ const en = {
   'localShort': 'local log',
   'yesterdayLabel': 'yesterday',
   'historyTitle': 'History (official query)',
+  'autoSession': 'browser session',
+  'notConnected': 'not connected',
+  'connectOfficial': 'Connect',
+  'connectHint': 'opens the official page; sign in there first, then come back',
   'localEstimate': 'local estimate',
   'diffLabel': 'diff',
   'officialOff': 'Official usage is off',
@@ -630,11 +638,23 @@ function TokenMeterPanel(props) {
             }, off?.ok
               ? [
                 React.createElement('span', { key: 'src' }, `来源 platform.deepseek.com/api/v0/usage`),
+                off.auto ? React.createElement('span', { key: 'au', style: { marginLeft: 6, color: C.ok } }, `· ${t('autoSession')}`) : null,
                 React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
               ]
-              : `${t('officialLabel')}：${off?.reason === 'disabled' ? t('officialOff')
-                : off?.reason === 'no-credential' ? t('officialNoToken')
-                  : (off?.error ?? t('balanceFailed'))}`);
+              : [
+                React.createElement('span', { key: 'why' }, `${t('officialLabel')}：${off?.reason === 'disabled' ? t('officialOff')
+                  : off?.reason === 'no-credential' ? t('notConnected')
+                    : (off?.error ?? t('balanceFailed'))} `),
+                React.createElement('span', {
+                  key: 'go',
+                  onClick: () => {
+                    try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ }
+                    refresh();
+                  },
+                  style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
+                }, t('connectOfficial')),
+                React.createElement('span', { key: 'hint', style: { marginLeft: 6, fontSize: 10.5 } }, t('connectHint')),
+              ]);
           })(),
           (() => React.createElement('div', {
             key: 'bs',

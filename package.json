@@ -1,6 +1,6 @@
 {
     "name":  "dsh-token-meter-panel",
-    "version":  "0.3.0",
+    "version":  "0.4.0",
     "description":  "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage \u0026 cost panel for DeepSeek Harness (community plugin, unofficial).",
     "type":  "module",
     "main":  "lib/index.js",
@@ -80,7 +80,7 @@
                     "build":  "node tools/build-client.mjs",
                     "watch":  "node tools/build-client.mjs --watch",
                     "setup":  "powershell -ExecutionPolicy Bypass -File tools/setup-modules.ps1",
-                    "test":  "node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
+                    "test":  "node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
                     "prepublishOnly":  "npm run build \u0026\u0026 npm test"
                 },
     "publishConfig":  {
