@@ -42,6 +42,13 @@ const zh = {
   'autoSession': '浏览器登录态',
   'notConnected': '未连接',
   'officialLoading': '正在获取官方数据…',
+  'firstLoad': '首次加载，请稍等',
+  'firstLoadHint': '（要读浏览器登录态并扫描本机会话日志，通常几秒）',
+  'licenseLabel': '开源协议',
+  'updateAvailable': '有新版本',
+  'copyCmd': '复制更新命令',
+  'copied': '已复制 ✓',
+  'viewRelease': '发布说明',
   'connectOfficial': '连接官方',
   'connectHint': '首次会打开官方网页，未登录请先在页面里登录，回来即自动生效',
   'localEstimate': '本地推算',
@@ -121,6 +128,13 @@ const en = {
   'autoSession': 'browser session',
   'notConnected': 'not connected',
   'officialLoading': 'fetching official data…',
+  'firstLoad': 'First load, please wait',
+  'firstLoadHint': '(reading browser session and scanning local session logs — usually a few seconds)',
+  'licenseLabel': 'license',
+  'updateAvailable': 'update available',
+  'copyCmd': 'copy update command',
+  'copied': 'copied ✓',
+  'viewRelease': 'release notes',
   'connectOfficial': 'Connect',
   'connectHint': 'opens the official page; sign in there first, then come back',
   'localEstimate': 'local estimate',
@@ -272,6 +286,14 @@ const SKINS = {
   },
 };
 const skinOf = (name) => SKINS[name] ?? SKINS.default;
+
+/* 首屏转圈用的 keyframes（只注入一次） */
+if (typeof document !== 'undefined' && !document.getElementById('dsh-tm-style')) {
+  const el = document.createElement('style');
+  el.id = 'dsh-tm-style';
+  el.textContent = '@keyframes dsh-tm-spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(el);
+}
 const swatch = (color) => ({
   width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block', flex: 'none',
 });
@@ -411,12 +433,35 @@ function TokenMeterPanel(props) {
 
   // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
   const [showRates, setShowRates] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
   const [showAllSessions, setShowAllSessions] = React.useState(false);
   // 自定义时间区间（null = 用近 7 / 30 天）
   const [custom, setCustom] = React.useState(null);
+  // 首次加载读秒：让用户知道在动、不是在卡（官方数据要读浏览器登录态 + 扫会话日志）
+  const [waitSec, setWaitSec] = React.useState(0);
+  React.useEffect(() => {
+    if (status !== 'loading' || data) return undefined;
+    const id = setInterval(() => setWaitSec((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [status, data]);
 
   if (status === 'loading' && !data) {
-    return React.createElement('div', { style: { padding: 28, color: C.label3, fontSize: 13 } }, t('loading'));
+    return React.createElement('div', {
+      style: {
+        padding: 28, color: C.label3, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
+      },
+    }, [
+      React.createElement('span', {
+        key: 'sp',
+        style: {
+          width: 12, height: 12, borderRadius: '50%', display: 'inline-block',
+          border: `2px solid ${C.border}`, borderTopColor: C.brand,
+          animation: 'dsh-tm-spin .8s linear infinite',
+        },
+      }),
+      React.createElement('span', { key: 't' }, `${t('firstLoad')} ${waitSec}s`),
+      React.createElement('span', { key: 'h', style: { fontSize: 11, color: C.label3 } }, t('firstLoadHint')),
+    ]);
   }
   if (status === 'failed' && !data) {
     return React.createElement('div', { style: { padding: 28, color: C.error, fontSize: 13 } }, [
@@ -1095,6 +1140,47 @@ function TokenMeterPanel(props) {
       React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件 · 扫描 ${data.elapsedMs}ms`),
       React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}`),
       React.createElement('div', { key: 'c' }, `${t('rateLine')}：${data.pricing?.source} （采集于 ${data.pricing?.fetchedAt}）`),
+      /* 版本号 + 开源协议 + 更新提示 */
+      React.createElement('div', {
+        key: 'ver',
+        style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 },
+      }, [
+        React.createElement('span', { key: 'n' }, `${data.plugin?.name ?? 'dsh-token-meter-panel'} v${data.plugin?.version ?? '?'}`),
+        React.createElement('span', { key: 's1' }, '·'),
+        React.createElement('a', {
+          key: 'lic',
+          href: `${data.plugin?.repo ?? 'https://github.com/olimc2016/dsh-token-meter-panel'}/blob/main/LICENSE`,
+          target: '_blank',
+          rel: 'noreferrer',
+          style: { color: C.label3, textDecoration: 'underline' },
+        }, `${data.plugin?.license ?? 'MIT'} ${t('licenseLabel')}`),
+        data.plugin?.update?.hasUpdate
+          ? React.createElement('span', { key: 'up', style: { display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 } }, [
+            React.createElement('span', {
+              key: 'b',
+              style: { color: C.warn, fontWeight: 600, padding: '1px 7px', borderRadius: 999, border: `1px solid ${C.warn}` },
+            }, `${t('updateAvailable')} v${data.plugin.update.latest}`),
+            React.createElement('span', {
+              key: 'cp',
+              onClick: async () => {
+                try {
+                  await navigator.clipboard.writeText(data.plugin.update.command);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1800);
+                } catch { /* 剪贴板不可用就算了 */ }
+              },
+              style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
+            }, copied ? t('copied') : t('copyCmd')),
+            React.createElement('a', {
+              key: 'd',
+              href: data.plugin.update.url,
+              target: '_blank',
+              rel: 'noreferrer',
+              style: { color: C.brand, textDecoration: 'none' },
+            }, `${t('viewRelease')} ↗`),
+          ])
+          : null,
+      ]),
       error ? React.createElement('div', { key: 'd', style: { color: C.warn } }, `${t('failed')}：${error}`) : null,
     ]),
     ]),
