@@ -31,12 +31,29 @@ const zh = {
   'remain': '剩余',
   'balance': '账户余额',
   'checkBalance': '查询余额',
-  'cacheSaved': '缓存命中省下',
-  'savedToday': '缓存今天省下',
+  'peakHourLabel': '峰值',
+  'peakShort': '高峰',
+  'offShort': '空闲',
+  'currentTier': '当前时段',
+  'officialLabel': '官方',
+  'localShort': '本地日志',
+  'yesterdayLabel': '昨天',
+  'historyTitle': '历史（官方查询）',
+  'localEstimate': '本地推算',
+  'diffLabel': '差',
+  'officialOff': '官方用量已关闭',
+  'officialNoToken': '未配置 Platform userToken',
+  'billingLink': '官方账单页',
+  'tierTitle': '峰谷价',
+  'peakWindow': '高峰：周一至周五 9:00-12:00、14:00-18:00（北京时间）',
+  'rangeCustom': '自定义',
+  'unitPrices': '计费单价（元/百万 token）',
   'warnLine': '告警线',
-  'withoutCache': '若无缓存需',
   'rateDetail': '计费明细',
-  'fewDays': '更早没有记录，可切到近 30 天',
+  'vsPrevOn': '较',
+  'notEnabled': '未开启',
+  'balanceFailed': '查询失败',
+  'fewDays': '更早没有记录',
   'showAllSessions': '查看全部',
   'collapseSessions': '收起',
   'missInput': '未命中输入',
@@ -47,7 +64,6 @@ const zh = {
   'trend': '每日消费趋势',
   'byHour': '今日分时用量',
   'costSplit': '今日成本构成',
-  'noCacheCost': '若没有硬盘缓存，今天需',
   'sessions': '今日按会话明细',
   'session': '会话',
   'lastCall': '最近调用',
@@ -89,12 +105,29 @@ const en = {
   'remain': 'left',
   'balance': 'Balance',
   'checkBalance': 'Check balance',
-  'cacheSaved': 'Saved by cache hits',
-  'savedToday': 'Saved by cache today',
+  'peakHourLabel': 'peak',
+  'peakShort': 'Peak',
+  'offShort': 'Off-peak',
+  'currentTier': 'Current period',
+  'officialLabel': 'Official',
+  'localShort': 'local log',
+  'yesterdayLabel': 'yesterday',
+  'historyTitle': 'History (official query)',
+  'localEstimate': 'local estimate',
+  'diffLabel': 'diff',
+  'officialOff': 'Official usage is off',
+  'officialNoToken': 'Platform userToken not configured',
+  'billingLink': 'Official billing page',
+  'tierTitle': 'Peak / off-peak rates',
+  'peakWindow': 'Peak: Mon-Fri 09:00-12:00, 14:00-18:00 (Beijing time)',
+  'rangeCustom': 'Custom',
+  'unitPrices': 'Unit prices (CNY per million tokens)',
+  'notEnabled': 'off',
+  'balanceFailed': 'lookup failed',
   'warnLine': 'Alert line',
-  'withoutCache': 'without cache',
   'rateDetail': 'Rate detail',
-  'fewDays': 'no earlier records — try the 30-day view',
+  'vsPrevOn': 'vs',
+  'fewDays': 'no earlier records',
   'showAllSessions': 'Show all',
   'collapseSessions': 'Collapse',
   'missInput': 'Uncached input',
@@ -105,7 +138,6 @@ const en = {
   'trend': 'Daily spend',
   'byHour': 'Today by hour',
   'costSplit': 'Cost breakdown today',
-  'noCacheCost': 'Without disk cache today would cost',
   'sessions': 'Today by session',
   'session': 'Session',
   'lastCall': 'Last call',
@@ -305,6 +337,8 @@ function TokenMeterPanel(props) {
   // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
   const [showRates, setShowRates] = React.useState(false);
   const [showAllSessions, setShowAllSessions] = React.useState(false);
+  // 自定义时间区间（null = 用近 7 / 30 天）
+  const [custom, setCustom] = React.useState(null);
 
   if (status === 'loading' && !data) {
     return React.createElement('div', { style: { padding: 28, color: C.label3, fontSize: 13 } }, t('loading'));
@@ -342,7 +376,11 @@ function TokenMeterPanel(props) {
   const cMiss = (D.miss / 1e6) * unit.miss;
   const cOut = (D.out / 1e6) * unit.out;
   const actual = cHit + cMiss + cOut || D.cny || 0;
-  const noCache = (D.hit / 1e6) * unit.miss + cMiss + cOut;
+
+  // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
+  const historyDays = Object.keys(days).sort().reverse().slice(0, 14)
+    .map((k) => ({ date: k, ...(days[k] ?? {}) }))
+    .filter((d) => (d.cny ?? 0) > 0 || (d.calls ?? 0) > 0);
 
   const budget = Number(data.config?.dailyBudget) || 0;
   const usedPct = budget > 0 ? pct(D.cny, budget) : 0;
@@ -351,16 +389,45 @@ function TokenMeterPanel(props) {
   const warn = budget > 0 && !over && usedPct >= alertPct;
   const delta = prev && prev.cny > 0 ? ((D.cny - prev.cny) / prev.cny) * 100 : null;
 
-  // 趋势窗口
+  // 头部左上角：更新时间 + 账户余额（余额查询默认关闭，关着时明确写「未开启」而不是留空）
+  const balInfo = balance.data?.ok ? balance.data.balance_infos?.[0] : null;
+  const balText = data.config?.showBalance
+    ? (balInfo ? `¥${balInfo.total_balance}` : t('balanceFailed'))
+    : t('notEnabled');
+
+  // 主数字口径：宿主已按官方用量接口给出天/时数据（meterSource === 'official'）
+  const official = data.official;
+  const officialOk = Boolean(official?.ok);
+  const meterOfficial = data.meterSource === 'official';
+  const shown = D.cny;
+  const officialBase = meterOfficial && Number(official?.yesterdayCny) > 0 ? Number(official.yesterdayCny) : null;
+  const localBase = prev && prev.cny > 0 ? prev.cny : null;
+  const base = meterOfficial ? officialBase : localBase;
+  const shownDelta = base ? ((shown - base) / base) * 100 : null;
+  const deltaLabel = meterOfficial ? t('yesterdayLabel') : (prevKey ? prevKey.slice(5) : '');
+
+  // 趋势窗口：默认近 7 / 30 天；选了自定义区间就按起止日期画
   const window_ = [];
-  for (let i = range - 1; i >= 0; i--) {
-    const ts = Date.now() - i * 86400000;
-    const key = new Date(ts + 8 * 3600e3).toISOString().slice(0, 10);
-    window_.push({ key, entry: days[key] ?? null });
+  if (custom && custom.from && custom.to && custom.from <= custom.to) {
+    const fromMs = Date.parse(`${custom.from}T00:00:00Z`);
+    const toMs = Date.parse(`${custom.to}T00:00:00Z`);
+    for (let ms = fromMs; ms <= toMs && window_.length < 180; ms += 86400000) {
+      const key = new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+      window_.push({ key, entry: days[key] ?? null });
+    }
+  } else {
+    for (let i = range - 1; i >= 0; i--) {
+      const ts = Date.now() - i * 86400000;
+      const key = new Date(ts + 8 * 3600e3).toISOString().slice(0, 10);
+      window_.push({ key, entry: days[key] ?? null });
+    }
   }
   const maxTotal = Math.max(...window_.map(({ entry }) => (entry ? entry.hit + entry.miss + entry.out : 0)), 1);
   // 有数据的天数：少于 3 天时给一句提示，避免趋势图看起来像坏了
   const dataDays = window_.filter(({ entry }) => entry && entry.hit + entry.miss + entry.out > 0).length;
+  // 数据很少时把窗口裁到「第一天有数据 → 今天」，别留一大片空白
+  const firstDataIdx = window_.findIndex(({ entry }) => entry && entry.hit + entry.miss + entry.out > 0);
+  const trend_ = dataDays > 0 && dataDays < 3 && firstDataIdx > 0 ? window_.slice(firstDataIdx) : window_;
   const maxHour = Math.max(...(D.byHour ?? [0]), 1);
   const peakHour = (D.byHour ?? []).indexOf(maxHour);
 
@@ -376,6 +443,25 @@ function TokenMeterPanel(props) {
     background: active ? 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.12))' : 'transparent',
     color: active ? C.label : C.label3,
   });
+  const dateInput = {
+    fontSize: 10.5, padding: '1px 4px', borderRadius: 6, border: `1px solid ${C.border}`,
+    background: 'transparent', color: C.label2, fontFamily: 'inherit', colorScheme: 'light dark',
+    width: 118, flex: 'none',
+  };
+  // 峰谷价表：把设置里生效的两个档位按模型列出来
+  const rateModels = cfgRates ? Object.keys(cfgRates.offPeak ?? {}) : [];
+  const priceRow = (label, rateSet) => React.createElement('div', {
+    key: label,
+    style: { display: 'grid', gridTemplateColumns: '30px minmax(0, 1fr)', gap: 6, fontSize: 11, color: C.label2, marginTop: 2 },
+  }, [
+    React.createElement('span', { key: 'l', style: { color: C.label3 } }, label),
+    React.createElement('div', { key: 'v', style: { display: 'flex', flexDirection: 'column' } },
+      rateModels.map((m) => React.createElement('span', {
+        key: m,
+        style: { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
+      }, `${m.replace('deepseek-', '')} ¥${rateSet?.[m]?.cacheHit} / ¥${rateSet?.[m]?.cacheMiss} / ¥${rateSet?.[m]?.output}`))),
+  ]);
+  const priceTable = null;
 
   return React.createElement('div', {
     style: {
@@ -389,28 +475,43 @@ function TokenMeterPanel(props) {
       key: 'head',
       style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
     }, [
-      React.createElement('div', { key: 'ti', style: { fontWeight: 700, fontSize: 15 } }, [
-        t('title'),
-        React.createElement('span', { key: 's', style: { fontWeight: 500, fontSize: 12, color: C.label3, marginLeft: 6 } }, `· ${t('subtitle')}`),
+      React.createElement('div', { key: 'ti', style: { minWidth: 0 } }, [
+        React.createElement('div', { key: 'l1', style: { fontWeight: 700, fontSize: 15 } }, [
+          t('title'),
+          React.createElement('span', { key: 's', style: { fontWeight: 500, fontSize: 12, color: C.label3, marginLeft: 6 } }, `· ${t('subtitle')}`),
+        ]),
+        React.createElement('div', {
+          key: 'l2',
+          style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 3 },
+        }, [
+          React.createElement('span', {
+            key: 'meta',
+            style: { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
+          }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
+          React.createElement('div', {
+            key: 'rf',
+            onClick: refresh,
+            title: `${t('refresh')} · ${t('updated')} ${clock(at || data.generatedAt)}`,
+            style: {
+              display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600,
+              padding: '3px 10px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
+              border: `1px solid ${C.brand}`, color: C.brand,
+              background: 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.10))',
+              opacity: status === 'loading' ? 0.55 : 1, whiteSpace: 'nowrap',
+            },
+          }, [
+            React.createElement('span', { key: 'i', style: { fontSize: 13, lineHeight: 1 } }, '⟳'),
+            t('refresh'),
+          ]),
+        ]),
       ]),
       React.createElement('div', { key: 'sp', style: { flex: 1 } }),
-      React.createElement('span', {
-        key: 'tier',
-        title: data.peakNow ? t('peakNow') : t('offNow'),
-        style: {
-          fontSize: 11, padding: '3px 9px', borderRadius: 999, border: `1px solid ${C.border}`,
-          color: data.peakNow ? C.warn : C.label2,
-        },
-      }, data.peakNow ? t('peak') : t('offpeak')),
-      React.createElement('div', { key: 'r7', style: chip(range === 7), onClick: () => setRange(7) }, t('range7')),
-      React.createElement('div', { key: 'r30', style: chip(range === 30), onClick: () => setRange(30) }, t('range30')),
-      React.createElement('div', { key: 'rf', style: chip(false), onClick: refresh, title: t('refresh') }, '⟳'),
     ]),
 
     /* 主指标 */
     React.createElement('div', {
       key: 'hero',
-      style: { display: 'grid', gridTemplateColumns: 'minmax(260px, 1.2fr) minmax(220px, 1fr)', gap: 12 },
+      style: { display: 'grid', gridTemplateColumns: 'minmax(250px, 1.05fr) minmax(300px, 1.15fr) minmax(230px, 0.9fr)', gap: 12 },
     }, [
       React.createElement('div', {
         key: 'spend',
@@ -425,32 +526,51 @@ function TokenMeterPanel(props) {
           style: { fontSize: 34, fontWeight: 750, lineHeight: 1.15, margin: '4px 0 2px', fontVariantNumeric: 'tabular-nums' },
         }, [
           React.createElement('span', { key: 'c', style: { fontSize: 16, fontWeight: 600, color: C.label2, marginRight: 2 } }, '¥'),
-          D.cny.toFixed(2),
-          delta !== null
+          shown.toFixed(2),
+          React.createElement('span', {
+            key: 'src',
+            style: {
+              fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 999, marginLeft: 8,
+              border: `1px solid ${C.border}`, color: officialOk ? C.brand : C.label3, verticalAlign: 'middle',
+            },
+          }, meterOfficial ? t('officialLabel') : t('localShort')),
+          shownDelta !== null
             ? React.createElement('span', {
               key: 'd',
               style: {
-                fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, marginLeft: 8,
-                color: delta >= 0 ? C.error : C.ok,
+                fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 999, marginLeft: 6,
+                color: shownDelta >= 0 ? C.error : C.ok,
                 background: 'var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12))',
               },
-            }, `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta).toFixed(0)}% ${t('vsPrev')}${prevKey ? ` · ${prevKey.slice(5)}` : ''}`)
+            }, `${t('vsPrevOn')} ${deltaLabel} ${shownDelta >= 0 ? '+' : '−'}${Math.abs(shownDelta).toFixed(0)}%`)
             : null,
         ]),
-        /* 招牌指标：缓存今天省下的钱（这是本插件最该被看见的数字） */
-        React.createElement('div', {
-          key: 'sv',
-          style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', margin: '2px 0 4px' },
-        }, [
-          React.createElement('span', { key: 'l', style: { fontSize: 12, color: C.label2 } }, t('savedToday')),
-          React.createElement('span', {
-            key: 'v',
-            style: { fontSize: 20, fontWeight: 720, color: C.hit, fontVariantNumeric: 'tabular-nums' },
-          }, money(Math.max(0, noCache - actual))),
-          React.createElement('span', { key: 'c', style: { fontSize: 11, color: C.label3 } },
-            `${t('withoutCache')} ${money(noCache)}`),
-        ]),
         React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
+          (() => {
+            const off = data.official;
+            const diff = off?.ok ? Math.abs(Number(off.cny) - actual) : null;
+            return React.createElement('div', {
+              key: 'official',
+              style: { fontSize: 11, color: C.label3, marginBottom: 2, fontVariantNumeric: 'tabular-nums' },
+            }, off?.ok
+              ? [
+                React.createElement('span', { key: 'src' }, `来源 platform.deepseek.com/api/v0/usage`),
+                React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
+              ]
+              : `${t('officialLabel')}：${off?.reason === 'disabled' ? t('officialOff')
+                : off?.reason === 'no-credential' ? t('officialNoToken')
+                  : (off?.error ?? t('balanceFailed'))}`);
+          })(),
+          (() => React.createElement('div', {
+            key: 'bs',
+            style: { fontSize: 11, color: C.label3, marginBottom: 2 },
+          }, React.createElement('a', {
+            key: 'link',
+            href: data.billingUrl || 'https://platform.deepseek.com/usage',
+            target: '_blank',
+            rel: 'noreferrer',
+            style: { color: C.brand, textDecoration: 'none', whiteSpace: 'nowrap' },
+          }, `${t('billingLink')} ↗`)))(),
           React.createElement('span', {
             key: 'tg',
             onClick: () => setShowRates((v) => !v),
@@ -460,7 +580,7 @@ function TokenMeterPanel(props) {
             ? React.createElement('div', { key: 'bd', style: { marginTop: 4 } }, [
               `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit} + ${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss} + ${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
               React.createElement('br', { key: 'br' }),
-              `${t('rateLine')}：¥/百万 token（${data.peakNow ? t('peak') : t('offpeak')}）`,
+              `${t('rateLine')}：${data.peakNow ? t('peak') : t('offpeak')}`,
             ])
             : null,
         ]),
@@ -490,10 +610,7 @@ function TokenMeterPanel(props) {
               key: 'txt',
               style: { fontSize: 11, color: over ? C.error : C.label3, marginTop: 6 },
             }, `${t('budgetUsed')} ${money(budget)} · ${t('used')} ${usedPct.toFixed(1)}% · ${t('remain')} ${money(Math.max(0, budget - D.cny))}` +
-              (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ${usedPct >= alertPct ? '⚠' : ''}` : '') +
-              (balance.data?.ok && balance.data.balance_infos?.[0]
-                ? ` · ${t('balance')} ¥${balance.data.balance_infos[0].total_balance}`
-                : '')),
+              (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ${usedPct >= alertPct ? '⚠' : ''}` : '')),
           ])
           : null,
       ]),
@@ -511,6 +628,26 @@ function TokenMeterPanel(props) {
           extra: ` · ${D.calls} ${t('calls')}`,
         }),
       ]),
+      /* 第三栏：峰谷时段与峰谷价 */
+      React.createElement('div', {
+        key: 'rates',
+        style: {
+          border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px', background: C.layer1,
+          fontSize: 11, color: C.label3, lineHeight: 1.7,
+        },
+      }, [
+        React.createElement('div', { key: 'h', style: { fontSize: 12, fontWeight: 650, color: C.label2 } }, t('tierTitle')),
+        React.createElement('div', { key: 'tier', style: { marginTop: 4 } }, [
+          React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600 } }, `${t('currentTier')}：`),
+          React.createElement('span', { key: 'v', style: { color: data.peakNow ? C.warn : C.label2 } },
+            data.peakNow ? t('peak') : t('offpeak')),
+        ]),
+        React.createElement('div', { key: 'w', style: { fontSize: 10.5, lineHeight: 1.6 } }, t('peakWindow')),
+        React.createElement('div', { key: 'cap', style: { fontSize: 10.5, marginTop: 8 } },
+          `${t('unitPrices')}（${t('hitInput')} / ${t('missInput')} / ${t('output')}）`),
+        priceRow(t('peakShort'), cfgRates?.peak),
+        priceRow(t('offShort'), cfgRates?.offPeak),
+      ]),
     ]),
 
     /* 趋势 */
@@ -520,13 +657,45 @@ function TokenMeterPanel(props) {
         style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: C.label3 },
       }, [
         React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('trend')),
+        React.createElement('div', {
+          key: 'r7',
+          style: chip(!custom && range === 7),
+          onClick: () => { setCustom(null); setRange(7); },
+        }, t('range7')),
+        React.createElement('div', {
+          key: 'r30',
+          style: chip(!custom && range === 30),
+          onClick: () => { setCustom(null); setRange(30); },
+        }, t('range30')),
+        React.createElement('div', {
+          key: 'rc',
+          style: chip(Boolean(custom)),
+          onClick: () => setCustom((c) => c || {
+            from: new Date(Date.now() - 13 * 86400000 + 8 * 3600e3).toISOString().slice(0, 10),
+            to: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10),
+          }),
+        }, t('rangeCustom')),
+        custom
+          ? React.createElement('span', { key: 'cd', style: { display: 'flex', alignItems: 'center', gap: 4 } }, [
+            React.createElement('input', {
+              key: 'f', type: 'date', value: custom.from,
+              onChange: (e) => setCustom((c) => ({ ...c, from: e.target.value })),
+              style: dateInput,
+            }),
+            React.createElement('span', { key: 'arrow', style: { color: C.label3 } }, '→'),
+            React.createElement('input', {
+              key: 'to', type: 'date', value: custom.to,
+              onChange: (e) => setCustom((c) => ({ ...c, to: e.target.value })),
+              style: dateInput,
+            }),
+          ])
+          : null,
         dataDays < 3
           ? React.createElement('span', {
             key: 'hint',
-            onClick: range === 7 ? () => setRange(30) : undefined,
             style: {
               fontSize: 10.5, color: C.label3, border: `1px solid ${C.border}`, borderRadius: 999,
-              padding: '1px 8px', cursor: range === 7 ? 'pointer' : 'default',
+              padding: '1px 8px', whiteSpace: 'nowrap',
             },
           }, t('fewDays'))
           : null,
@@ -537,8 +706,12 @@ function TokenMeterPanel(props) {
       ]),
       React.createElement('div', {
         key: 'bars',
-        style: { display: 'flex', alignItems: 'flex-end', gap: range > 10 ? 3 : 8, height: 108, marginTop: 16 },
-      }, window_.map(({ key, entry }, index) => {
+        style: {
+          position: 'relative', display: 'flex', alignItems: 'flex-end', gap: range > 10 ? 3 : 8,
+          height: 108, marginTop: 16, justifyContent: trend_.length <= 4 ? 'center' : 'flex-start',
+        },
+      }, [
+        ...trend_.map(({ key, entry }, index) => {
         const total = entry ? entry.hit + entry.miss + entry.out : 0;
         const h = total > 0 ? Math.max(4, (total / maxTotal) * 100) : 2;
         const isToday = key === today;
@@ -552,8 +725,19 @@ function TokenMeterPanel(props) {
           style: {
             flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
             outline: isToday ? `1px dashed ${C.brand}` : 'none', outlineOffset: 2, borderRadius: 6, minWidth: 0,
+            maxWidth: trend_.length <= 4 ? 78 : 'none', position: 'relative',
           },
         }, [
+          trend_.length <= 4 && total > 0
+            ? React.createElement('div', {
+              key: 'val',
+              style: {
+                position: 'absolute', left: 0, right: 0, bottom: `calc(${h}% + 5px)`, textAlign: 'center',
+                fontSize: 10.5, fontWeight: 600, color: isToday ? C.brand : C.label2,
+                fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', whiteSpace: 'nowrap',
+              },
+            }, money(entry.cny))
+            : null,
           total > 0
             ? React.createElement('div', {
               key: 's',
@@ -568,23 +752,32 @@ function TokenMeterPanel(props) {
               style: { height: '2%', minHeight: 2, background: 'var(--dsw-alias-border-l2, rgba(128,128,128,.3))', borderRadius: 3 },
             }),
         ]);
-      })),
+      }), ]),
       React.createElement('div', {
         key: 'x',
-        style: { display: 'flex', gap: range > 10 ? 3 : 8, marginTop: 6, paddingTop: 4, borderTop: `1px solid ${C.border1}` },
-      }, window_.map(({ key, entry }) => {
-        const total = entry ? entry.hit + entry.miss + entry.out : 0;
-        const isToday = key === today;
-        return React.createElement('div', {
-          key,
-          style: {
-            flex: 1, textAlign: 'center', fontSize: 10, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap',
-            color: isToday ? C.brand : C.label3,
-            opacity: total > 0 ? 1 : 0.4,
-            fontWeight: isToday ? 700 : 400,
-          },
-        }, isToday ? t('today') : key.slice(5));
-      })),
+        style: {
+          display: 'flex', gap: range > 10 ? 3 : 8, marginTop: 6, paddingTop: 4, borderTop: `1px solid ${C.border1}`,
+          justifyContent: trend_.length <= 4 ? 'center' : 'flex-start',
+        },
+      }, trend_.length > 31
+        ? [React.createElement('div', {
+          key: 'range',
+          style: { flex: 1, textAlign: 'center', fontSize: 10, color: C.label3, fontVariantNumeric: 'tabular-nums' },
+        }, `${trend_[0].key.slice(5)} → ${trend_[trend_.length - 1].key.slice(5)}`)]
+        : trend_.map(({ key, entry }) => {
+          const total = entry ? entry.hit + entry.miss + entry.out : 0;
+          const isToday = key === today;
+          return React.createElement('div', {
+            key,
+            style: {
+              flex: 1, textAlign: 'center', fontSize: 10, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap',
+              color: isToday ? C.brand : C.label3,
+              opacity: total > 0 ? 1 : 0.4,
+              fontWeight: isToday ? 700 : 400,
+              maxWidth: trend_.length <= 4 ? 78 : 'none',
+            },
+          }, isToday ? t('today') : key.slice(5));
+        })),
 
       /* 分时 */
       React.createElement('div', { key: 'hr', style: { marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border1}` } }, [
@@ -594,7 +787,7 @@ function TokenMeterPanel(props) {
         }, [
           React.createElement('span', { key: 't', style: { fontWeight: 650, color: C.label2 } }, t('byHour')),
           React.createElement('span', { key: 'sp', style: { flex: 1 } }),
-          React.createElement('span', { key: 'p' }, `${String(peakHour).padStart(2, '0')}:00 · ${fmt(maxHour)} tokens · ${D.calls} ${t('calls')}`),
+          React.createElement('span', { key: 'p' }, `${String(peakHour).padStart(2, '0')}:00 · ${t('peakHourLabel')} ${fmt(maxHour)} tokens`),
         ]),
         React.createElement('div', {
           key: 'bars',
@@ -627,6 +820,44 @@ function TokenMeterPanel(props) {
       ]),
     ]),
 
+    /* 历史（官方查询） */
+    meterOfficial && historyDays.length
+      ? React.createElement('div', { key: 'hist', style: card }, [
+        React.createElement('div', {
+          key: 'h',
+          style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 },
+        }, [
+          React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('historyTitle')),
+          React.createElement('span', { key: 's' }, `platform.deepseek.com/api/v0/usage · ${historyDays.length} 天`),
+        ]),
+        React.createElement('table', { key: 'tb', style: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 8 } }, [
+          React.createElement('thead', { key: 'th' }, React.createElement('tr', null,
+            [t('today').slice(0, 0) + '日期', t('cost'), t('hitInput'), t('missInput'), t('output'), t('callsShort')]
+              .map((h, i) => React.createElement('th', {
+                key: h,
+                style: {
+                  textAlign: i >= 1 ? 'right' : 'left', fontWeight: 600, fontSize: 11, color: C.label3,
+                  padding: '6px 8px', borderBottom: `1px solid ${C.border1}`, whiteSpace: 'nowrap',
+                },
+              }, h)))),
+          React.createElement('tbody', { key: 'tb' }, historyDays.map((d) => React.createElement('tr', { key: d.date }, [
+            React.createElement('td', {
+              key: 'd',
+              style: {
+                padding: '6px 8px', color: d.date === today ? C.brand : C.label2,
+                fontWeight: d.date === today ? 700 : 400, borderBottom: `1px solid ${C.border1}`, whiteSpace: 'nowrap',
+              },
+            }, d.date),
+            React.createElement('td', { key: 'c', style: { padding: '6px 8px', textAlign: 'right', fontWeight: 650, color: C.label, borderBottom: `1px solid ${C.border1}`, fontVariantNumeric: 'tabular-nums' } }, money(d.cny)),
+            React.createElement('td', { key: 'h', style: { padding: '6px 8px', textAlign: 'right', color: C.label2, borderBottom: `1px solid ${C.border1}`, fontVariantNumeric: 'tabular-nums' } }, fmt(d.hit)),
+            React.createElement('td', { key: 'm', style: { padding: '6px 8px', textAlign: 'right', color: C.label2, borderBottom: `1px solid ${C.border1}`, fontVariantNumeric: 'tabular-nums' } }, fmt(d.miss)),
+            React.createElement('td', { key: 'o', style: { padding: '6px 8px', textAlign: 'right', color: C.label2, borderBottom: `1px solid ${C.border1}`, fontVariantNumeric: 'tabular-nums' } }, fmt(d.out)),
+            React.createElement('td', { key: 'n', style: { padding: '6px 8px', textAlign: 'right', color: C.label3, borderBottom: `1px solid ${C.border1}` } }, d.calls ?? 0),
+          ]))),
+        ]),
+      ])
+      : null,
+
     /* 成本构成 */
     React.createElement('div', { key: 'split', style: card }, [
       React.createElement('div', {
@@ -635,7 +866,6 @@ function TokenMeterPanel(props) {
       }, [
         React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('costSplit')),
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
-        React.createElement('span', { key: 'n' }, `${t('noCacheCost')} ${money(noCache)}`),
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
@@ -662,10 +892,6 @@ function TokenMeterPanel(props) {
             React.createElement('span', { key: 'p', style: { color: C.label3, marginLeft: 6 } }, `${pct(cost, actual).toFixed(0)}%`),
           ]),
         ]))),
-      React.createElement('div', {
-        key: 'saved',
-        style: { marginTop: 10, fontSize: 11.5, color: C.label3 },
-      }, `${t('cacheSaved')} ${money(Math.max(0, noCache - actual))}`),
     ]),
 
     /* 按会话明细 */
@@ -676,7 +902,7 @@ function TokenMeterPanel(props) {
       }, [
         React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('sessions')),
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
-        React.createElement('span', { key: 'n' }, t('calls')),
+        React.createElement('span', { key: 'n' }, `${D.calls} ${t('calls')}`),
       ]),
       todaySessions.length === 0
         ? React.createElement('div', { key: 'e', style: { fontSize: 12, color: C.label3, padding: '12px 0' } }, t('noData'))

@@ -89,7 +89,8 @@ dsh plugin --profile desktop add .
 A "Token" gauge icon appears at the bottom of the sidebar; click it to open the panel.
 
 Permissions and data boundary: this plugin only reads local session logs, writes no files and runs
-no commands; the only network access is the **optional** balance lookup (off by default).
+no commands; the only network access is the account-balance lookup, which you can switch off in
+Settings for a fully zero-egress setup.
 See [Privacy & permissions](#privacy--permissions).
 
 ---
@@ -148,23 +149,23 @@ Active sessions are still appending, hence "today" is a lower bound (stated in t
 
 ## Privacy & permissions
 
-Short version: **this plugin is a pure observer — it only reads local logs, writes no files,
-runs no commands, and makes no network calls by default.**
+Short version: **this plugin is a pure observer — it only reads local logs, writes no files and
+runs no commands; its only outbound traffic is the account-balance lookup, which you can switch off.**
 
 | Permission | What this plugin actually does |
 |---|---|
 | **Files (read)** | Only `$DSH_HOME/sessions/**/session[.v3].jsonl[.zstd]` (DSH's own session-log directory) |
 | **Files (write)** | **None** — no files, no cache on disk (aggregates live in memory and are recomputed on restart) |
-| **Network** | **Zero by default**; the only outbound call is the optional balance lookup below |
+| **Network** | Only the account-balance lookup; turn "show balance" off in Settings for a fully zero-egress setup |
 | **Command execution** | **None** — nothing is spawned |
 | **Credentials** | Resolved by **reference name** (default `DEEPSEEK_API_KEY`) from DSH's credential service; the secret stays in host-process memory and is **never sent to the browser, logged, or written to disk** |
 
-Balance lookup (optional):
+Balance lookup:
 
 - Calls `GET https://api.deepseek.com/user/balance` from the **host (Node) side only**; the browser never sees the key
-- Happens only after you enable "show balance" in **Settings → Plugins → dsh-token-meter-panel**
-  (**off by default** — with it off the plugin makes no network calls at all)
-- The credential name is configurable
+- The panel shows `account balance ¥x` in the top-left; `off` means you disabled it in Settings, and
+  `lookup failed` means the credential is missing or the endpoint returned an error
+- Toggle it (and change the credential name) in **Settings → Plugins → dsh-token-meter-panel**
 
 Local HTTP routes (used by the panel):
 
@@ -184,7 +185,7 @@ Settings namespace: `token-meter-panel`
 |---|---|---|
 | `dailyBudget` | 50 | Daily budget in CNY; 0 = unlimited |
 | `alertAtPercent` | 80 | Warn at this share of the budget (bar changes color) |
-| `showBalance` | false | Query and show the account balance (off = zero network access) |
+| `showBalance` | true | Query and show the account balance (off = zero network access) |
 | `apiKeyEnv` | `DEEPSEEK_API_KEY` | Credential name used for the balance lookup |
 | `refreshSeconds` | 60 | Panel auto-refresh interval in seconds; 0 = off |
 | `officialOnly` | true | Count only DeepSeek-billed calls (third-party providers excluded) |
