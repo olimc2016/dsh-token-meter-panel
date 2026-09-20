@@ -32,6 +32,13 @@ const zh = {
   'balance': '账户余额',
   'checkBalance': '查询余额',
   'cacheSaved': '缓存命中省下',
+  'savedToday': '缓存今天省下',
+  'warnLine': '告警线',
+  'withoutCache': '若无缓存需',
+  'rateDetail': '计费明细',
+  'fewDays': '更早没有记录，可切到近 30 天',
+  'showAllSessions': '查看全部',
+  'collapseSessions': '收起',
   'missInput': '未命中输入',
   'hitInput': '缓存命中输入',
   'output': '输出',
@@ -83,6 +90,13 @@ const en = {
   'balance': 'Balance',
   'checkBalance': 'Check balance',
   'cacheSaved': 'Saved by cache hits',
+  'savedToday': 'Saved by cache today',
+  'warnLine': 'Alert line',
+  'withoutCache': 'without cache',
+  'rateDetail': 'Rate detail',
+  'fewDays': 'no earlier records — try the 30-day view',
+  'showAllSessions': 'Show all',
+  'collapseSessions': 'Collapse',
   'missInput': 'Uncached input',
   'hitInput': 'Cached input',
   'output': 'Output',
@@ -288,6 +302,10 @@ function TokenMeterPanel(props) {
   const live = useLiveUsage(props);
   const balance = useBalance(Boolean(data?.config?.showBalance), data?.generatedAt);
 
+  // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
+  const [showRates, setShowRates] = React.useState(false);
+  const [showAllSessions, setShowAllSessions] = React.useState(false);
+
   if (status === 'loading' && !data) {
     return React.createElement('div', { style: { padding: 28, color: C.label3, fontSize: 13 } }, t('loading'));
   }
@@ -341,6 +359,8 @@ function TokenMeterPanel(props) {
     window_.push({ key, entry: days[key] ?? null });
   }
   const maxTotal = Math.max(...window_.map(({ entry }) => (entry ? entry.hit + entry.miss + entry.out : 0)), 1);
+  // 有数据的天数：少于 3 天时给一句提示，避免趋势图看起来像坏了
+  const dataDays = window_.filter(({ entry }) => entry && entry.hit + entry.miss + entry.out > 0).length;
   const maxHour = Math.max(...(D.byHour ?? [0]), 1);
   const peakHour = (D.byHour ?? []).indexOf(maxHour);
 
@@ -414,25 +434,58 @@ function TokenMeterPanel(props) {
                 color: delta >= 0 ? C.error : C.ok,
                 background: 'var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12))',
               },
-            }, `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta).toFixed(0)}% ${t('vsPrev')}`)
+            }, `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta).toFixed(0)}% ${t('vsPrev')}${prevKey ? ` · ${prevKey.slice(5)}` : ''}`)
             : null,
         ]),
+        /* 招牌指标：缓存今天省下的钱（这是本插件最该被看见的数字） */
+        React.createElement('div', {
+          key: 'sv',
+          style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', margin: '2px 0 4px' },
+        }, [
+          React.createElement('span', { key: 'l', style: { fontSize: 12, color: C.label2 } }, t('savedToday')),
+          React.createElement('span', {
+            key: 'v',
+            style: { fontSize: 20, fontWeight: 720, color: C.hit, fontVariantNumeric: 'tabular-nums' },
+          }, money(Math.max(0, noCache - actual))),
+          React.createElement('span', { key: 'c', style: { fontSize: 11, color: C.label3 } },
+            `${t('withoutCache')} ${money(noCache)}`),
+        ]),
         React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
-          `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit} + ${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss} + ${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
-          React.createElement('br', { key: 'br' }),
-          `${t('rateLine')}：¥/百万 token（${data.peakNow ? t('peak') : t('offpeak')}）`,
+          React.createElement('span', {
+            key: 'tg',
+            onClick: () => setShowRates((v) => !v),
+            style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
+          }, `${t('rateDetail')} ${showRates ? '▴' : '▾'}`),
+          showRates
+            ? React.createElement('div', { key: 'bd', style: { marginTop: 4 } }, [
+              `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit} + ${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss} + ${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
+              React.createElement('br', { key: 'br' }),
+              `${t('rateLine')}：¥/百万 token（${data.peakNow ? t('peak') : t('offpeak')}）`,
+            ])
+            : null,
         ]),
         budget > 0
           ? React.createElement('div', { key: 'p', style: { marginTop: 10 } }, [
-            React.createElement('div', {
-              key: 'track',
-              style: { height: 5, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))', overflow: 'hidden' },
-            }, React.createElement('div', {
-              style: {
-                height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`,
-                background: over ? C.error : warn ? C.warn : C.brand,
-              },
-            })),
+            React.createElement('div', { key: 'tw', style: { position: 'relative' } }, [
+              React.createElement('div', {
+                key: 'track',
+                style: { height: 8, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))', overflow: 'hidden' },
+              }, React.createElement('div', {
+                style: {
+                  height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`,
+                  background: over ? C.error : warn ? C.warn : C.brand,
+                  transition: 'width .3s ease',
+                },
+              })),
+              React.createElement('div', {
+                key: 'tick',
+                title: `${t('warnLine')} ${alertPct}%`,
+                style: {
+                  position: 'absolute', left: `${Math.min(alertPct, 100)}%`, top: -3, width: 2, height: 14,
+                  background: C.warn, opacity: 0.7, borderRadius: 2,
+                },
+              }),
+            ]),
             React.createElement('div', {
               key: 'txt',
               style: { fontSize: 11, color: over ? C.error : C.label3, marginTop: 6 },
@@ -467,6 +520,16 @@ function TokenMeterPanel(props) {
         style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 11, color: C.label3 },
       }, [
         React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('trend')),
+        dataDays < 3
+          ? React.createElement('span', {
+            key: 'hint',
+            onClick: range === 7 ? () => setRange(30) : undefined,
+            style: {
+              fontSize: 10.5, color: C.label3, border: `1px solid ${C.border}`, borderRadius: 999,
+              padding: '1px 8px', cursor: range === 7 ? 'pointer' : 'default',
+            },
+          }, t('fewDays'))
+          : null,
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
         React.createElement('span', { key: 'l1', style: { display: 'flex', alignItems: 'center', gap: 5 } }, [React.createElement('i', { key: 'i', style: swatch(C.hit) }), t('hitInput')]),
         React.createElement('span', { key: 'l2', style: { display: 'flex', alignItems: 'center', gap: 5 } }, [React.createElement('i', { key: 'i', style: swatch(C.miss) }), t('missInput')]),
@@ -508,7 +571,7 @@ function TokenMeterPanel(props) {
       })),
       React.createElement('div', {
         key: 'x',
-        style: { display: 'flex', gap: range > 10 ? 3 : 8, marginTop: 6 },
+        style: { display: 'flex', gap: range > 10 ? 3 : 8, marginTop: 6, paddingTop: 4, borderTop: `1px solid ${C.border1}` },
       }, window_.map(({ key, entry }) => {
         const total = entry ? entry.hit + entry.miss + entry.out : 0;
         const isToday = key === today;
@@ -516,10 +579,11 @@ function TokenMeterPanel(props) {
           key,
           style: {
             flex: 1, textAlign: 'center', fontSize: 10, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap',
-            color: isToday ? C.brand : total > 0 ? C.label3 : 'transparent',
+            color: isToday ? C.brand : C.label3,
+            opacity: total > 0 ? 1 : 0.4,
             fontWeight: isToday ? 700 : 400,
           },
-        }, isToday ? t('today') : (range > 10 ? key.slice(5) : key.slice(5)));
+        }, isToday ? t('today') : key.slice(5));
       })),
 
       /* 分时 */
@@ -534,18 +598,28 @@ function TokenMeterPanel(props) {
         ]),
         React.createElement('div', {
           key: 'bars',
-          style: { display: 'flex', alignItems: 'flex-end', gap: 2, height: 42, marginTop: 8 },
-        }, Array.from({ length: 24 }, (_, h) => React.createElement('div', {
-          key: h,
-          title: `${String(h).padStart(2, '0')}:00 · ${fmt(D.byHour?.[h] ?? 0)} tokens`,
-          style: {
-            flex: 1, minHeight: 2,
-            height: `${Math.max(((D.byHour?.[h] ?? 0) / maxHour) * 100, 1.5)}%`,
-            background: h === peakHour ? 'var(--dsw-alias-state-business-primary, #25d0e0)' : C.miss,
-            opacity: h === peakHour ? 1 : 0.55,
-            borderRadius: '2px 2px 0 0',
-          },
-        }))),
+          style: { position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 2, height: 42, marginTop: 8 },
+        }, [
+          ...[50, 100].map((p) => React.createElement('div', {
+            key: `grid${p}`,
+            style: {
+              position: 'absolute', left: 0, right: 0, bottom: `${p}%`,
+              borderTop: `1px dashed ${C.border1}`, pointerEvents: 'none',
+            },
+          })),
+          ...Array.from({ length: 24 }, (_, h) => React.createElement('div', {
+            key: h,
+            title: `${String(h).padStart(2, '0')}:00 · ${fmt(D.byHour?.[h] ?? 0)} tokens`,
+            style: {
+              position: 'relative', zIndex: 1,
+              flex: 1, minHeight: 2,
+              height: `${Math.max(((D.byHour?.[h] ?? 0) / maxHour) * 100, 1.5)}%`,
+              background: h === peakHour ? 'var(--dsw-alias-state-business-primary, #25d0e0)' : C.miss,
+              opacity: h === peakHour ? 1 : 0.55,
+              borderRadius: '2px 2px 0 0',
+            },
+          })),
+        ]),
         React.createElement('div', {
           key: 'ax',
           style: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.label3, marginTop: 4 },
@@ -617,7 +691,7 @@ function TokenMeterPanel(props) {
                     padding: '6px 8px', borderBottom: `1px solid ${C.border1}`, whiteSpace: 'nowrap',
                   },
                 }, h)))),
-            React.createElement('tbody', { key: 'tb' }, todaySessions.slice(0, 20).map((s) => React.createElement('tr', { key: s.id }, [
+            React.createElement('tbody', { key: 'tb' }, todaySessions.slice(0, showAllSessions ? todaySessions.length : 5).map((s) => React.createElement('tr', { key: s.id }, [
               React.createElement('td', {
                 key: 'n',
                 style: { padding: '7px 8px', borderBottom: `1px solid ${C.border1}`, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: C.label2 },
@@ -644,6 +718,14 @@ function TokenMeterPanel(props) {
                 style: { padding: '7px 8px', textAlign: 'right', fontWeight: 650, color: C.label, borderBottom: `1px solid ${C.border1}`, fontVariantNumeric: 'tabular-nums' },
               }, money(s.cny)),
             ]))),
+            todaySessions.length > 5
+              ? React.createElement('tfoot', { key: 'tf' }, React.createElement('tr', null,
+                React.createElement('td', {
+                  colSpan: 7,
+                  onClick: () => setShowAllSessions((v) => !v),
+                  style: { padding: '7px 8px', fontSize: 11.5, color: C.brand, cursor: 'pointer', userSelect: 'none' },
+                }, showAllSessions ? t('collapseSessions') : `${t('showAllSessions')} (${todaySessions.length})`)))
+              : null,
           ])),
     ]),
 

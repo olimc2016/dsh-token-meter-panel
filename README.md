@@ -67,6 +67,7 @@ dsh plugin --profile desktop add ./dsh-token-meter-panel-0.1.0.tgz
 
 ```bash
 dsh plugin --profile desktop add dsh-token-meter-panel
+dsh plugin --profile web add dsh-token-meter-panel
 ```
 
 ### 方式三：从源码（开发者）

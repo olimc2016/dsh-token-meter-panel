@@ -1,6 +1,6 @@
 {
   "name": "dsh-token-meter-panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage & cost panel for DeepSeek Harness (community plugin, unofficial).",
   "type": "module",
   "main": "lib/index.js",
@@ -62,8 +62,8 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-settings": ">=0.1.5-rc.2 <0.2.0-0",
-    "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.2 <0.2.0-0"
+    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.1 <0.3.0-0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-settings": {
