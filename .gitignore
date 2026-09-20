@@ -1,0 +1,20 @@
+# 依赖（11 MB+，绝不要提交；esbuild 带平台二进制）
+node_modules/
+
+# 打包产物（Release 用的 tarball，用 npm pack 重新生成即可）
+*.tgz
+
+# 本地笔记 / 发布流程清单（含本机环境信息，不进公开仓库、不进 npm 包）
+publish-checklist.local.md
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+.tmp/

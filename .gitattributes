@@ -1,0 +1,11 @@
+# 统一用 LF，避免 Windows 上提交 CRLF 到脚本与 JSON
+* text=auto eol=lf
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.tgz binary
+
+# 不让 GitHub 把本仓库当第三方代码统计
+lib/client.js linguist-generated=true
+lib/client.js.map linguist-generated=true

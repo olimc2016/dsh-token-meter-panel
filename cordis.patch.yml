@@ -1,0 +1,15 @@
+# token-meter-panel bundle patch：把自己插进 DSH 的 profile 层栈。
+# 宿主半侧（Node）从这里被 Loader 加载；浏览器半侧由 package.json 的 dsh.client 声明。
+#
+# 注意 row id 必须唯一：内核 @deepseek-ai/dsh-base 已经占了 `token-meter` 这个 id
+#（官方 @deepseek-ai/dsh-token-meter 计量服务），同名会让加载器报重复 id，因此这里用
+# `token-meter-panel`。
+- insert:
+    - id: token-meter-panel
+      name: 'dsh-token-meter-panel'
+      config:
+        # 留空即用默认值：会话目录取 $DSH_HOME/sessions，费率取官方现价。
+        # 想改默认值可以在这里写，例如：
+        # dailyBudget: 50
+        # refreshSeconds: 60
+        {}
