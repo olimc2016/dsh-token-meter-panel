@@ -180,7 +180,7 @@ function packBucket(b) {
  * @param {string} sessionsRoot 会话根目录
  * @param {{rates?:object, includeOtherProviders?:boolean, limit?:number}} [options]
  */
-export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, limit = Infinity } = {}) {
+export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, limit = Infinity, budgetMs = 0 } = {}) {
   const files = [];
   const listEntries = (p) => {
     try {
@@ -227,7 +227,15 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
   let calls = 0, unpriced = 0, unreadable = 0;
   let newestMtime = 0;
 
+  // 时间预算：会话日志可能非常大（几十上百个文件、单个几百 MB），全量解压会把首屏拖到一分钟以上。
+  // kept 已按 mtime 倒序（最新优先），所以超预算直接停手，保住"最近/今天"这部分数据。
+  const deadline = budgetMs > 0 ? Date.now() + budgetMs : Infinity;
+  let scanned = 0;
+  let partialScan = false;
+
   for (const f of kept) {
+    if (Date.now() > deadline) { partialScan = true; break; }
+    scanned += 1;
     let records;
     try {
       records = readSessionRecords(f.file);
@@ -296,10 +304,11 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
   return {
     generatedAt: Date.now(),
     sessionsRoot,
-    filesScanned: kept.length,
+    filesScanned: scanned,
     filesSkippedAsStale: skipped.map((f) => f.sessionId),
     unreadableFiles: unreadable,
     newestSourceMtime: newestMtime || null,
+    partialScan,
     calls, unpricedCalls: unpriced,
     days: Object.fromEntries([...days.entries()].map(([k, v]) => [k, packBucket(v)])),
     sessions: Object.fromEntries([...sessions.entries()].map(([k, v]) => {
