@@ -26,7 +26,7 @@
 import { readdirSync, readFileSync, copyFileSync, existsSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, homedir, platform } from 'node:os';
-import { zstdDecompressSync } from 'node:zlib';
+import zlib from 'node:zlib';
 
 /* ============ 1. varint：LevelDB 的长度/偏移都是 LEB128 小端 varint ============ */
 /** 从 buf[pos] 读一个 varint，返回 [值, 下一个位置] */
@@ -113,7 +113,12 @@ function readBlock(file, fileEnd, handle) {
   const type = file[end];
   if (type === COMPRESSION_NONE) return raw;
   if (type === COMPRESSION_SNAPPY) return snappyDecompress(raw);
-  if (type === COMPRESSION_ZSTD) return zstdDecompressSync(raw); // 少数新版 Chromium 会用它
+  if (type === COMPRESSION_ZSTD) {
+    // 注意：必须用 zlib.zstdDecompressSync 而不是顶层命名导入 ——
+    // 老版本 Node 没有这个导出，命名导入会让整个模块在链接期报错（曾导致 DSH 起不来）
+    if (typeof zlib.zstdDecompressSync !== 'function') throw new Error('当前 Node 不支持 zstd 块');
+    return zlib.zstdDecompressSync(raw);
+  }
   throw new Error(`未知块压缩类型：${type}`);
 }
 

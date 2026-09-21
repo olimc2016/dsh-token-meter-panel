@@ -1,5 +1,18 @@
 # 变更记录
 
+## 0.5.1 — 紧急修复：装 0.5.0 会导致 DSH 起不来
+
+### 修复（严重）
+
+- **根因**：`src/chrome-storage.mjs` 顶层写了 `import { zstdDecompressSync } from 'node:zlib'`。
+  这个导出只在 Node ≥ 22.15 存在，**老版本 Node 上命名导入会在模块链接期直接抛错** →
+  `lib/index.js` 导入失败 → 插件加载失败 → DSH Desktop 启动被带崩
+- **修法（两道防线）**：
+  1. 改为 `import zlib from 'node:zlib'`，用到时再判断 `typeof zlib.zstdDecompressSync === 'function'`
+  2. `lib/index.js` 改成**动态导入**读取器（`await import(...)`），
+     读取器即便加载失败也只是降级成「未连接」，**绝不可能再拖垮插件与 DSH 启动**
+- 教训：插件里任何「宿主 Node 版本相关」的 API 都不能用顶层命名导入，一律延迟取用 + 能力判断
+
 ## 0.5.0 — 版本号、开源协议与更新提示
 
 ### 新增
