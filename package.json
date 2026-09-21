@@ -1,6 +1,6 @@
 {
     "name":  "dsh-token-meter-panel",
-    "version":  "0.5.4",
+    "version":  "0.6.0",
     "description":  "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage \u0026 cost panel for DeepSeek Harness (community plugin, unofficial).",
     "type":  "module",
     "main":  "lib/index.js",

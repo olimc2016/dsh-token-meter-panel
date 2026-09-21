@@ -50,6 +50,10 @@ const zh = {
   'byCurrentTier': '按当前时段单价',
   'licenseLabel': '开源协议',
   'updateAvailable': '有新版本',
+  'updateAuto': '后台自动更新中（重启 DSH 生效）',
+  'updateRunning': '正在后台更新…',
+  'updateApplied': '已后台更新完成，重启 DSH 生效',
+  'updateFailed': '后台更新失败（缺 pnpm？）',
   'copyCmd': '复制更新命令',
   'copied': '已复制 ✓',
   'viewRelease': '发布说明',
@@ -140,6 +144,10 @@ const en = {
   'byCurrentTier': 'at the current tier price',
   'licenseLabel': 'license',
   'updateAvailable': 'update available',
+  'updateAuto': 'auto-updating in background (restart DSH)',
+  'updateRunning': 'updating in background…',
+  'updateApplied': 'updated in background — restart DSH',
+  'updateFailed': 'background update failed (pnpm missing?)',
   'copyCmd': 'copy update command',
   'copied': 'copied ✓',
   'viewRelease': 'release notes',
@@ -1196,6 +1204,11 @@ function TokenMeterPanel(props) {
               key: 'b',
               style: { color: C.warn, fontWeight: 600, padding: '1px 7px', borderRadius: 999, border: `1px solid ${C.warn}` },
             }, `${t('updateAvailable')} v${data.plugin.update.latest}`),
+            React.createElement('span', { key: 'st', style: { color: data.plugin.update.error ? C.error : C.label3 } },
+              data.plugin.update.applied ? t('updateApplied')
+                : data.plugin.update.running ? t('updateRunning')
+                  : data.plugin.update.error ? t('updateFailed')
+                    : t('updateAuto')),
             React.createElement('span', {
               key: 'cp',
               onClick: async () => {
