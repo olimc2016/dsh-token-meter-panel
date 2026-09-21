@@ -51,13 +51,39 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 
 ## 安装
 
-> **当前状态：尚未发布到 npm**（npm 账号注册中）。现在请用 GitHub Release 里的 tarball 安装。
+### 方式零：一键脚本（推荐）
 
-### 方式一：GitHub Release 的 tarball（现在可用）
+**Windows**（自动找到 DSH 自带的 `dsh` 与 `pnpm`，装完提示重启）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/olimc2016/dsh-token-meter-panel/main/install.ps1 | iex"
+```
+
+**macOS / Linux**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/olimc2016/dsh-token-meter-panel/main/install.sh | bash
+```
+
+脚本接受两个可选参数：`-Version v0.6.0`（默认 latest）、`-Profile web`（默认 desktop）。
+
+> `dsh: 无法将"dsh"项识别为…` → DSH Desktop 自带 CLI 但没进系统 PATH。脚本会把
+> `%APPDATA%\DSH Desktop\{host-commands,cli,runtime-commands}` 里的 `dsh.cmd` / `pnpm.cmd` 临时加进 PATH。
+> 若报 `'pnpm' is not recognized`：`npm i -g pnpm` 后重试。
+> 装好 **0.6.0 及以后**，后续版本会**在后台自动升级**，下次重启 DSH 即生效，无需再手动装。
+
+### 方式一：GitHub 直装（固定版本）
+
+```bash
+dsh plugin --profile desktop add github:olimc2016/dsh-token-meter-panel#v0.6.0
+```
+
+### 方式二：GitHub Release 的 tarball
 
 1. 到 [Releases](https://github.com/olimc2016/dsh-token-meter-panel/releases) 下载
-   `dsh-token-meter-panel-0.1.0.tgz`
-2. 装进 profile：
+   `dsh-token-meter-panel-0.6.0.tgz`
+
+> **以下为旧版说明（0.1.0 tarball 仍可用）**
 
 ```bash
 dsh plugin --profile desktop add ./dsh-token-meter-panel-0.1.0.tgz
