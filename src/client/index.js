@@ -417,8 +417,8 @@ function TokenMeterPanel(props) {
   const [officialTries, setOfficialTries] = React.useState(0);
   React.useEffect(() => {
     if (!officialLoading) { if (officialTries) setOfficialTries(0); return undefined; }
-    if (officialTries >= 8) return undefined;
-    const id = setTimeout(() => { setOfficialTries((n) => n + 1); refresh(); }, 1200);
+    if (officialTries >= 25) return undefined;
+    const id = setTimeout(() => { setOfficialTries((n) => n + 1); refresh(); }, 1500);
     return () => clearTimeout(id);
   }, [officialLoading, officialTries, refresh]);
 
@@ -623,30 +623,6 @@ function TokenMeterPanel(props) {
           t('title'),
           React.createElement('span', { key: 's', style: { fontWeight: 500, fontSize: 12, color: C.label3, marginLeft: 6 } }, `· ${t('subtitle')}`),
         ]),
-        React.createElement('div', {
-          key: 'l2',
-          style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 3 },
-        }, [
-          React.createElement('span', {
-            key: 'meta',
-            style: { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' },
-          }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
-          React.createElement('div', {
-            key: 'rf',
-            onClick: refresh,
-            title: `${t('refresh')} · ${t('updated')} ${clock(at || data.generatedAt)}`,
-            style: {
-              display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600,
-              padding: '3px 10px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
-              border: `1px solid ${C.brand}`, color: C.brand,
-              background: 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.10))',
-              opacity: status === 'loading' ? 0.55 : 1, whiteSpace: 'nowrap',
-            },
-          }, [
-            React.createElement('span', { key: 'i', style: { fontSize: 13, lineHeight: 1 } }, '⟳'),
-            t('refresh'),
-          ]),
-        ]),
       ]),
       React.createElement('div', { key: 'sp', style: { flex: 1 } }),
     ]),
@@ -661,6 +637,27 @@ function TokenMeterPanel(props) {
         style: S.hero,
       }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
+        React.createElement('div', {
+          key: 'meta',
+          style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 2, fontVariantNumeric: 'tabular-nums' },
+        }, [
+          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
+          React.createElement('div', {
+            key: 'rf',
+            onClick: refresh,
+            title: `${t('refresh')} · ${t('updated')} ${clock(at || data.generatedAt)}`,
+            style: {
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+              padding: '2px 9px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
+              border: `1px solid ${C.brand}`, color: C.brand,
+              background: 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.10))',
+              opacity: status === 'loading' ? 0.55 : 1, whiteSpace: 'nowrap',
+            },
+          }, [
+            React.createElement('span', { key: 'i', style: { fontSize: 12, lineHeight: 1 } }, '⟳'),
+            t('refresh'),
+          ]),
+        ]),
         React.createElement('div', {
           key: 'n',
           style: { fontSize: 34, fontWeight: 750, lineHeight: 1.15, margin: '4px 0 2px', fontVariantNumeric: 'tabular-nums' },
