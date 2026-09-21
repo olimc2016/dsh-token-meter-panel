@@ -24,44 +24,57 @@ $Package = 'dsh-token-meter-panel'
 
 Write-Host "== $Package installer ==" -ForegroundColor Cyan
 
-# ---- 1) collect candidate bin dirs (dsh + pnpm shipped with DSH Desktop) ----
-$roots = @(
-  (Join-Path $env:APPDATA 'DSH Desktop\host-commands'),
-  (Join-Path $env:APPDATA 'DSH Desktop\cli'),
-  (Join-Path $env:APPDATA 'DSH Desktop\runtime-commands')
-) | Where-Object { Test-Path $_ }
-
-$extraBins = @()
-foreach ($r in $roots) {
-  Get-ChildItem $r -Recurse -Include dsh.cmd,pnpm.cmd -ErrorAction SilentlyContinue |
-    ForEach-Object { $extraBins += $_.DirectoryName }
-}
-$extraBins = $extraBins | Select-Object -Unique
-if ($extraBins.Count -gt 0) {
-  $env:PATH = ($extraBins -join ';') + ';' + $env:PATH
-  Write-Host "found DSH tool dirs:" -ForegroundColor DarkGray
-  $extraBins | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-}
-
-# ---- 2) locate the DSH CLI ----
+# ---- 1) locate the DSH CLI ----
+# If `dsh` already resolves, don't touch PATH at all (messing with PATH can break
+# the CLI's own pnpm lookup). Only when it's missing do we discover and prepend dirs.
 $dsh = $null
 $cmd = Get-Command dsh -ErrorAction SilentlyContinue
-if ($cmd) { $dsh = @($cmd.Source) }
-elseif ($extraBins.Count -gt 0) {
-  $hit = Get-ChildItem ($extraBins -join ',') -Filter dsh.cmd -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($hit) { $dsh = @($hit.FullName) }
+if ($cmd) {
+  $dsh = $cmd.Source
+  Write-Host "using DSH CLI from PATH: $dsh" -ForegroundColor DarkGray
+}
+
+if (-not $dsh) {
+  Write-Host "dsh not on PATH; looking inside DSH Desktop..." -ForegroundColor Yellow
+  $roots = @(
+    (Join-Path $env:APPDATA 'DSH Desktop\runtime-commands'),
+    (Join-Path $env:APPDATA 'DSH Desktop\host-commands'),
+    (Join-Path $env:APPDATA 'DSH Desktop\cli')
+  ) | Where-Object { Test-Path $_ }
+
+  $found = @()
+  foreach ($r in $roots) {
+    Get-ChildItem $r -Recurse -Include dsh.cmd -ErrorAction SilentlyContinue |
+      ForEach-Object { $found += $_.FullName }
+  }
+  # prefer concrete generation dirs, newest first
+  $found = $found | Sort-Object @{ Expression = { if ($_ -match 'generations') { 0 } else { 1 } } }, `
+                                 @{ Expression = { (Get-Item $_).LastWriteTime } ; Descending = $true } |
+           Select-Object -Unique
+
+  foreach ($c in $found) {
+    try {
+      $null = & $c --version 2>$null
+      if ($LASTEXITCODE -eq 0) {
+        $dsh = $c
+        $bin = Split-Path $c -Parent
+        $env:PATH = "$bin;$env:PATH"
+        Write-Host "using DSH CLI: $dsh" -ForegroundColor DarkGray
+        break
+      }
+    } catch { $null = $_ }
+  }
+  if (-not $dsh -and $found.Count -gt 0) { $dsh = $found[0]; $env:PATH = "$(Split-Path $dsh -Parent);$env:PATH" }
 }
 
 $spec = "github:$Repo"
 if ($Version -and $Version -ne 'latest') { $spec = "$spec#$Version" }
 
 if ($dsh) {
-  Write-Host "using DSH CLI: $($dsh[0])" -ForegroundColor DarkGray
-  # pnpm must be resolvable by the CLI; report early if not
   if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-    Write-Host "note: pnpm not found on PATH. DSH ships one; if the install fails, add its dir to PATH." -ForegroundColor Yellow
+    Write-Host "note: pnpm not found. If install fails, run: npm i -g pnpm" -ForegroundColor Yellow
   }
-  & $dsh[0] plugin --profile $Profile add $spec
+  & $dsh plugin --profile $Profile add $spec
   $code = $LASTEXITCODE
 } else {
   Write-Host "dsh not found on PATH; falling back to npx @deepseek-ai/dsh" -ForegroundColor Yellow
