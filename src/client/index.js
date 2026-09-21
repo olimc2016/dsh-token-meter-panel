@@ -44,6 +44,10 @@ const zh = {
   'officialLoading': '正在获取官方数据…',
   'firstLoad': '首次加载，请稍等',
   'firstLoadHint': '（要读浏览器登录态并扫描本机会话日志，通常几秒）',
+  'sumLabel': '合计',
+  'fromOfficial': '官方',
+  'tierFromLocal': '峰/谷按本机日志分档',
+  'byCurrentTier': '按当前时段单价',
   'licenseLabel': '开源协议',
   'updateAvailable': '有新版本',
   'copyCmd': '复制更新命令',
@@ -130,6 +134,10 @@ const en = {
   'officialLoading': 'fetching official data…',
   'firstLoad': 'First load, please wait',
   'firstLoadHint': '(reading browser session and scanning local session logs — usually a few seconds)',
+  'sumLabel': 'Total',
+  'fromOfficial': 'official',
+  'tierFromLocal': 'peak/off-peak split from local logs',
+  'byCurrentTier': 'at the current tier price',
   'licenseLabel': 'license',
   'updateAvailable': 'update available',
   'copyCmd': 'copy update command',
@@ -769,22 +777,53 @@ function TokenMeterPanel(props) {
         }),
         React.createElement(Stat, { key: '3', t, surface: S.stat, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
         React.createElement(Stat, { key: '4', t, surface: S.stat, label: t('output'), color: C.out, value: fmt(D.out) }),
-        /* 金额公式：把「今天的钱怎么来的」直接写出来（与官方总额一致） */
+        /* 金额公式：峰/谷分开算，再汇总（合计以官方金额为准） */
         React.createElement('div', {
           key: 'formula',
           style: {
             gridColumn: '1 / -1', fontSize: 11.5, color: C.label3, lineHeight: 1.8,
             borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2,
           },
-        }, [
-          React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
-          ' = ',
-          `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit}`,
-          ' + ',
-          `${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss}`,
-          ' + ',
-          `${t('output')} ${fmt(D.out)} × ¥${unit.out}`,
-        ]),
+        }, (() => {
+          const tier = D.tier;
+          const row = (label, tk, prices, cny) => React.createElement('div', {
+            key: label,
+            style: { display: 'flex', gap: 6, flexWrap: 'wrap' },
+          }, [
+            React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, label),
+            React.createElement('span', { key: 'm', style: { color: C.label, fontWeight: 650 } }, money(cny)),
+            React.createElement('span', { key: 'eq' }, '='),
+            React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmt(tk?.hit ?? 0)} × ¥${prices.hit}`),
+            React.createElement('span', { key: 'p1' }, '+'),
+            React.createElement('span', { key: 'm2' }, `${t('missInput')} ${fmt(tk?.miss ?? 0)} × ¥${prices.miss}`),
+            React.createElement('span', { key: 'p2' }, '+'),
+            React.createElement('span', { key: 'o' }, `${t('output')} ${fmt(tk?.out ?? 0)} × ¥${prices.out}`),
+          ]);
+          if (!tier || ((tier.peak?.calls ?? 0) === 0 && (tier.offPeak?.calls ?? 0) === 0)) {
+            // 没有分档数据（例如当天没有本地日志）时退回单行展示，并标明按当前时段单价
+            return [
+              React.createElement('div', { key: 'one', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
+                React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
+                React.createElement('span', { key: 'eq' }, '='),
+                React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit}`),
+                React.createElement('span', { key: 'p1' }, '+'),
+                React.createElement('span', { key: 'p2' }, `${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss}`),
+                React.createElement('span', { key: 'p3' }, '+'),
+                React.createElement('span', { key: 'o' }, `${t('output')} ${fmt(D.out)} × ¥${unit.out}`),
+                React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('byCurrentTier')}）`),
+              ]),
+            ];
+          }
+          return [
+            row(t('peak'), tier.peak, cfgRates?.peak?.['deepseek-flash'] ?? unit, tier.peak?.cny ?? 0),
+            row(t('offpeak'), tier.offPeak, cfgRates?.offPeak?.['deepseek-flash'] ?? unit, tier.offPeak?.cny ?? 0),
+            React.createElement('div', { key: 'sum', style: { display: 'flex', gap: 6, marginTop: 2 } }, [
+              React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, t('sumLabel')),
+              React.createElement('span', { key: 'v', style: { color: C.label, fontWeight: 700 } }, money(D.cny)),
+              React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('fromOfficial')}；${t('tierFromLocal')}）`),
+            ]),
+          ];
+        })()),
       ]),
       /* 第三栏：峰谷时段与峰谷价 */
       React.createElement('div', {

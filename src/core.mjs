@@ -119,6 +119,11 @@ function blankBucket() {
   return {
     miss: 0, hit: 0, out: 0, cacheWrite: 0, reasoning: 0, calls: 0,
     cny: 0, peakCalls: 0, unpricedCalls: 0,
+    // 峰/谷分档累计（同一批 token 在高峰、空闲两档分别花了多少）
+    tier: {
+      peak: { hit: 0, miss: 0, out: 0, cny: 0, calls: 0 },
+      offPeak: { hit: 0, miss: 0, out: 0, cny: 0, calls: 0 },
+    },
     firstTime: null, lastTime: null,
     byHour: new Array(24).fill(0),
     models: new Map(),
@@ -137,6 +142,13 @@ function accumulate(bucket, usage, model, ms, cost) {
   if (cost) {
     bucket.cny += cost.cny;
     if (cost.peak) bucket.peakCalls += 1;
+    // 按该次调用所处的档位分别记账（峰/谷各一份），后面面板要分开显示再汇总
+    const t = cost.peak ? bucket.tier.peak : bucket.tier.offPeak;
+    t.hit += usage.cacheReadTokens || 0;
+    t.miss += usage.inputTokens || 0;
+    t.out += usage.outputTokens || 0;
+    t.cny += cost.cny;
+    t.calls += 1;
   } else {
     bucket.unpricedCalls += 1;
   }
@@ -146,6 +158,10 @@ function accumulate(bucket, usage, model, ms, cost) {
 
 function packBucket(b) {
   const totalIn = b.hit + b.miss;
+  const packTier = (t) => ({
+    miss: t.miss, hit: t.hit, out: t.out,
+    calls: t.calls, cny: Number(t.cny.toFixed(6)),
+  });
   return {
     miss: b.miss, hit: b.hit, out: b.out, cacheWrite: b.cacheWrite, reasoning: b.reasoning,
     calls: b.calls, cny: Number(b.cny.toFixed(6)), peakCalls: b.peakCalls, unpricedCalls: b.unpricedCalls,
@@ -153,6 +169,7 @@ function packBucket(b) {
     hitRate: totalIn > 0 ? Number(((100 * b.hit) / totalIn).toFixed(1)) : null,
     byHour: b.byHour,
     models: Object.fromEntries(b.models),
+    tier: b.tier ? { peak: packTier(b.tier.peak), offPeak: packTier(b.tier.offPeak) } : undefined,
   };
 }
 
