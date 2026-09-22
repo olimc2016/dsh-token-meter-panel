@@ -654,29 +654,8 @@ function TokenMeterPanel(props) {
       }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
         React.createElement('div', {
-          key: 'meta',
-          style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 2, fontVariantNumeric: 'tabular-nums' },
-        }, [
-          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
-          React.createElement('div', {
-            key: 'rf',
-            onClick: refresh,
-            title: `${t('refresh')} · ${t('updated')} ${clock(at || data.generatedAt)}`,
-            style: {
-              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
-              padding: '2px 9px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
-              border: `1px solid ${C.brand}`, color: C.brand,
-              background: 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.10))',
-              opacity: status === 'loading' ? 0.55 : 1, whiteSpace: 'nowrap',
-            },
-          }, [
-            React.createElement('span', { key: 'i', style: { fontSize: 12, lineHeight: 1 } }, '⟳'),
-            t('refresh'),
-          ]),
-        ]),
-        React.createElement('div', {
           key: 'n',
-          style: { fontSize: 34, fontWeight: 750, lineHeight: 1.15, margin: '4px 0 2px', fontVariantNumeric: 'tabular-nums' },
+          style: { fontSize: 34, fontWeight: 750, lineHeight: 1.15, margin: '6px 0 2px', fontVariantNumeric: 'tabular-nums' },
         }, [
           React.createElement('span', { key: 'c', style: { fontSize: 16, fontWeight: 600, color: C.label2, marginRight: 2 } }, '¥'),
           shown.toFixed(2),
@@ -697,6 +676,28 @@ function TokenMeterPanel(props) {
               },
             }, `${t('vsPrevOn')} ${deltaLabel} ${shownDelta >= 0 ? '+' : '−'}${Math.abs(shownDelta).toFixed(0)}%`)
             : null,
+        ]),
+        /* 顺序按阅读习惯：先看到金额，再看更新时间和余额 */
+        React.createElement('div', {
+          key: 'meta',
+          style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 2, fontVariantNumeric: 'tabular-nums' },
+        }, [
+          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
+          React.createElement('div', {
+            key: 'rf',
+            onClick: refresh,
+            title: `${t('refresh')} · ${t('updated')} ${clock(at || data.generatedAt)}`,
+            style: {
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+              padding: '2px 9px', borderRadius: 999, cursor: 'pointer', userSelect: 'none',
+              border: `1px solid ${C.brand}`, color: C.brand,
+              background: 'var(--dsw-alias-interactive-bg-hover, rgba(47,125,255,.10))',
+              opacity: status === 'loading' ? 0.55 : 1, whiteSpace: 'nowrap',
+            },
+          }, [
+            React.createElement('span', { key: 'i', style: { fontSize: 12, lineHeight: 1 } }, '⟳'),
+            t('refresh'),
+          ]),
         ]),
         React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
