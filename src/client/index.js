@@ -215,6 +215,14 @@ const fmt = (n) => {
   if (v >= 1e3) return (v / 1e3).toFixed(v / 1e3 >= 10 ? 0 : 1) + 'K';
   return String(Math.round(v));
 };
+/** 一律用 M（百万）为单位，便于把「按 M × 单价」的算式对齐看懂 */
+const fmtM = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 1e7) return (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return (v / 1e6).toFixed(3) + 'M';
+  return (v / 1e6).toFixed(4) + 'M';
+};
 const money = (n) => '¥' + (Number(n) || 0).toFixed(2);
 const pct = (a, b) => (b > 0 ? (100 * a) / b : 0);
 const hhmm = (ms) => {
@@ -795,6 +803,12 @@ function TokenMeterPanel(props) {
           },
         }, (() => {
           const tier = D.tier;
+          // 费率字段名是 cacheHit / cacheMiss / output（不是 hit/miss/out）
+          const unitOf = (rateSet) => ({
+            hit: rateSet?.cacheHit ?? unit.hit,
+            miss: rateSet?.cacheMiss ?? unit.miss,
+            out: rateSet?.output ?? unit.out,
+          });
           const row = (label, tk, prices, cny) => React.createElement('div', {
             key: label,
             style: { display: 'flex', gap: 6, flexWrap: 'wrap' },
@@ -802,11 +816,11 @@ function TokenMeterPanel(props) {
             React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, label),
             React.createElement('span', { key: 'm', style: { color: C.label, fontWeight: 650 } }, money(cny)),
             React.createElement('span', { key: 'eq' }, '='),
-            React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmt(tk?.hit ?? 0)} × ¥${prices.hit}`),
+            React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(tk?.hit ?? 0)} × ¥${prices.hit}`),
             React.createElement('span', { key: 'p1' }, '+'),
-            React.createElement('span', { key: 'm2' }, `${t('missInput')} ${fmt(tk?.miss ?? 0)} × ¥${prices.miss}`),
+            React.createElement('span', { key: 'm2' }, `${t('missInput')} ${fmtM(tk?.miss ?? 0)} × ¥${prices.miss}`),
             React.createElement('span', { key: 'p2' }, '+'),
-            React.createElement('span', { key: 'o' }, `${t('output')} ${fmt(tk?.out ?? 0)} × ¥${prices.out}`),
+            React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(tk?.out ?? 0)} × ¥${prices.out}`),
           ]);
           if (!tier || ((tier.peak?.calls ?? 0) === 0 && (tier.offPeak?.calls ?? 0) === 0)) {
             // 没有分档数据（例如当天没有本地日志）时退回单行展示，并标明按当前时段单价
@@ -814,18 +828,18 @@ function TokenMeterPanel(props) {
               React.createElement('div', { key: 'one', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
                 React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
                 React.createElement('span', { key: 'eq' }, '='),
-                React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmt(D.hit)} × ¥${unit.hit}`),
+                React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(D.hit)} × ¥${unit.hit}`),
                 React.createElement('span', { key: 'p1' }, '+'),
-                React.createElement('span', { key: 'p2' }, `${t('missInput')} ${fmt(D.miss)} × ¥${unit.miss}`),
+                React.createElement('span', { key: 'p2' }, `${t('missInput')} ${fmtM(D.miss)} × ¥${unit.miss}`),
                 React.createElement('span', { key: 'p3' }, '+'),
-                React.createElement('span', { key: 'o' }, `${t('output')} ${fmt(D.out)} × ¥${unit.out}`),
+                React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(D.out)} × ¥${unit.out}`),
                 React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('byCurrentTier')}）`),
               ]),
             ];
           }
           return [
-            row(t('peak'), tier.peak, cfgRates?.peak?.['deepseek-flash'] ?? unit, tier.peak?.cny ?? 0),
-            row(t('offpeak'), tier.offPeak, cfgRates?.offPeak?.['deepseek-flash'] ?? unit, tier.offPeak?.cny ?? 0),
+            row(t('peak'), tier.peak, unitOf(cfgRates?.peak?.['deepseek-flash']), tier.peak?.cny ?? 0),
+            row(t('offpeak'), tier.offPeak, unitOf(cfgRates?.offPeak?.['deepseek-flash']), tier.offPeak?.cny ?? 0),
             React.createElement('div', { key: 'sum', style: { display: 'flex', gap: 6, marginTop: 2 } }, [
               React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, t('sumLabel')),
               React.createElement('span', { key: 'v', style: { color: C.label, fontWeight: 700 } }, money(D.cny)),
