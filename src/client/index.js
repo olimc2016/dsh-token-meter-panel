@@ -1148,6 +1148,11 @@ function TokenMeterPanel(props) {
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
         React.createElement('span', { key: 'tot', style: { color: C.label3, fontVariantNumeric: 'tabular-nums' } },
           `${t('fromOfficial')} ${money(SD.cny ?? 0)}`),
+        // 临时自检（定位「选日期后三行数值不变」用，查清后我会删掉）
+        React.createElement('span', { key: 'dbg', style: { color: C.warn, fontSize: 10, marginLeft: 10, fontVariantNumeric: 'tabular-nums' } },
+          `[sel=${selDay ?? 'null'} day=${selDay && days[selDay] ? 'y' : 'n'} tier=${SD.tier ? 'y' : 'n'} `
+          + `hit=${Math.round(SD.hit ?? -1)} miss=${Math.round(SD.miss ?? -1)} out=${Math.round(SD.out ?? -1)} `
+          + `cost=${sHit.toFixed(3)}/${sMiss.toFixed(3)}/${sOut.toFixed(3)} total=${splitTotal.toFixed(3)}]`),
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
