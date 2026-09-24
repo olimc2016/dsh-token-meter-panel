@@ -1201,26 +1201,20 @@ function TokenMeterPanel(props) {
           // ③ 金额
           React.createElement('div', { key: 'v', style: { textAlign: 'right', fontWeight: 650, color: C.label, fontVariantNumeric: 'tabular-nums' } },
             money(cost)),
-          // ④ 彩条 + 比例（比例一定落在这一栏内：条够长就写在条里，否则贴在条尾右侧）
-          React.createElement('div', {
-            key: 'tr',
-            style: { position: 'relative', height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
-          }, (() => {
-            const p = pct(cost, splitTotal);
-            const wide = p >= 45;
-            return [
-              React.createElement('div', {
-                key: 'fill',
-                style: { height: '100%', width: `${p.toFixed(1)}%`, background: color, borderRadius: 99 },
-              }),
-              React.createElement('span', {
-                key: 'p',
-                style: wide
-                  ? { position: 'absolute', top: -3, left: `calc(${p.toFixed(1)}% - 36px)`, fontSize: 11, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums' }
-                  : { position: 'absolute', top: -3, left: `calc(${p.toFixed(1)}% + 6px)`, fontSize: 11, fontWeight: 600, color: C.label2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' },
-              }, `${p.toFixed(0)}%`),
-            ];
-          })()),
+          // ④ 彩条 + 比例：比例固定在彩条右侧的独立小列，三行位置一致、绝不被条压住
+          React.createElement('div', { key: 'tr', style: { display: 'flex', alignItems: 'center', gap: 7 } }, [
+            React.createElement('div', {
+              key: 'track',
+              style: { position: 'relative', flex: 1, minWidth: 0, height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
+            }, React.createElement('div', {
+              key: 'fill',
+              style: { height: '100%', width: `${pct(cost, splitTotal).toFixed(1)}%`, background: color, borderRadius: 99 },
+            })),
+            React.createElement('span', {
+              key: 'p',
+              style: { width: 34, textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.label2, fontVariantNumeric: 'tabular-nums', flex: 'none' },
+            }, `${pct(cost, splitTotal).toFixed(0)}%`),
+          ]),
         ]))),
     ]),
 
