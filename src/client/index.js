@@ -357,8 +357,16 @@ function MeterIcon({ size = 16, active }) {
 /* ------------------------------------------------------------------ *
  * 数据获取
  * ------------------------------------------------------------------ */
+/**
+ * 模块级缓存：面板被切走再切回来时，React 组件会重新挂载 —— 有上次结果就直接渲染，
+ * 后台再刷新（stale-while-revalidate）。这就是「点击即用」，不再每次都转圈读秒。
+ */
+let lastSummary = null;
+
 function useSummary(intervalSec) {
-  const [state, setState] = React.useState({ status: 'loading', data: null, error: null, at: 0 });
+  const [state, setState] = React.useState(() => (lastSummary
+    ? { status: 'ready', data: lastSummary.data, error: null, at: lastSummary.at }
+    : { status: 'loading', data: null, error: null, at: 0 }));
   const [tick, setTick] = React.useState(0);
   const first = React.useRef(true);
 
@@ -372,7 +380,9 @@ function useSummary(intervalSec) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const body = await response.json();
         if (!body?.ok) throw new Error(body?.error ?? 'unknown error');
-        if (alive) setState({ status: 'ready', data: body.data, error: null, at: Date.now() });
+        const at = Date.now();
+        lastSummary = { data: body.data, at };
+        if (alive) setState({ status: 'ready', data: body.data, error: null, at });
       })
       .catch((error) => {
         // 已有数据时只标记错误，不清空面板
