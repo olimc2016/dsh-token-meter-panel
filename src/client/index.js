@@ -1066,7 +1066,7 @@ function TokenMeterPanel(props) {
         ]),
         React.createElement('div', {
           key: 'bars',
-          style: { position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 2, height: 42, marginTop: 8 },
+          style: { position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 2, height: 42, marginTop: 22 },
         }, [
           ...[50, 100].map((p) => React.createElement('div', {
             key: `grid${p}`,
@@ -1088,6 +1088,22 @@ function TokenMeterPanel(props) {
               borderRadius: '2px 2px 0 0',
             },
           })),
+          // 峰/谷分界点：标出高峰的起止时刻（工作日 9/12/14/18 点），周末没有高峰故不标
+          ...(peakHoursToday[9]
+            ? [9, 12, 14, 18].map((h) => React.createElement('div', {
+              key: `pk${h}`,
+              style: {
+                position: 'absolute', top: 0, bottom: 0, pointerEvents: 'none', zIndex: 3,
+                left: `calc(${h} * (100% - 46px) / 24 + ${h * 2}px)`,
+                borderLeft: `1px dashed ${C.miss}`, opacity: 0.9,
+              },
+            }, React.createElement('span', {
+              style: {
+                position: 'absolute', top: -14, left: 1, fontSize: 9.5, color: C.miss,
+                whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+              },
+            }, `${h}:00`)))
+            : []),
         ]),
         React.createElement('div', {
           key: 'ax',
