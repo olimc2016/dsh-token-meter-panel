@@ -976,9 +976,17 @@ function TokenMeterPanel(props) {
               key: 's',
               style: { height: `${h}%`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderRadius: '5px 5px 3px 3px', overflow: 'hidden' },
             }, [
-              React.createElement('div', { key: 'h', style: { flex: Math.max(entry.hit, 1), minHeight: 3, background: C.hit } }),
-              React.createElement('div', { key: 'm', style: { flex: Math.max(entry.miss, 1), minHeight: 3, background: C.miss } }),
+              // 自上而下：输出 → 未命中 → 命中（命中在最底部，并在色带里标出命中率）
               React.createElement('div', { key: 'o', style: { flex: Math.max(entry.out, 1), minHeight: 3, background: C.out } }),
+              React.createElement('div', { key: 'm', style: { flex: Math.max(entry.miss, 1), minHeight: 3, background: C.miss } }),
+              React.createElement('div', {
+                key: 'h',
+                style: {
+                  flex: Math.max(entry.hit, 1), minHeight: 3, background: C.hit,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9.5, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums',
+                },
+              }, h >= 34 && entry.hitRate != null && entry.hitRate > 0 ? `${entry.hitRate}%` : null),
             ])
             : React.createElement('div', {
               key: 'z',
