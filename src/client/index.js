@@ -85,6 +85,7 @@ const zh = {
   'byHour': '今日分时用量',
   'costSplit': '今日成本构成',
   'clickForSplit': '点击可看当天成本构成',
+  'byAmount': '按金额占比',
   'sessions': '今日按会话明细',
   'session': '会话',
   'lastCall': '最近调用',
@@ -179,6 +180,8 @@ const en = {
   'trend': 'Daily spend',
   'byHour': 'Today by hour',
   'costSplit': 'Cost breakdown today',
+  'clickForSplit': 'Click a bar to see that day',
+  'byAmount': 'share by cost',
   'sessions': 'Today by session',
   'session': 'Session',
   'lastCall': 'Last call',
@@ -551,6 +554,10 @@ function TokenMeterPanel(props) {
   const sHit = costOf('hit');
   const sMiss = costOf('miss');
   const sOut = costOf('out');
+  /** 同一天的 token 量（和金额并列展示，避免把"金额占比"误读成"token 占比"） */
+  const tokOf = (which) => (SD.tier
+    ? ((SD.tier.peak?.[which] ?? 0) + (SD.tier.offPeak?.[which] ?? 0))
+    : (SD[which] ?? 0));
   const splitDay = selDay && days[selDay] ? selDay : today;
   /** 「占比」分母 = 当前展示的这三项之和（统一来源，保证三者相加 ≈100%）；全为 0 时退回当天官方金额 */
   const splitTotal = (sHit + sMiss + sOut) > 0 ? (sHit + sMiss + sOut) : ((SD.cny ?? 0) || 1);
@@ -1162,6 +1169,8 @@ function TokenMeterPanel(props) {
       }, [
         React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } },
           splitDay === today ? t('costSplit') : `${t('costSplit')} · ${splitDay.slice(5)}`),
+        React.createElement('span', { key: 'basis', style: { fontSize: 10.5, color: C.label3, border: `1px solid ${C.border}`, borderRadius: 999, padding: '1px 7px' } },
+          t('byAmount')),
         splitDay === today
           ? null
           : React.createElement('span', {
@@ -1175,16 +1184,20 @@ function TokenMeterPanel(props) {
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
-          // 顺序与直方图堆叠一致：输出 → 未命中 → 缓存命中
-          [t('output'), C.out, sOut],
-          [t('missInput'), C.miss, sMiss],
-          [t('hitInput'), C.hit, sHit],
-        ].map(([label, color, cost]) => React.createElement('div', {
+          // 顺序与直方图堆叠一致：输出 → 未命中 → 缓存命中；每行同时给出 token 量（次级）与金额占比（条形）
+          [t('output'), C.out, sOut, tokOf('out')],
+          [t('missInput'), C.miss, sMiss, tokOf('miss')],
+          [t('hitInput'), C.hit, sHit, tokOf('hit')],
+        ].map(([label, color, cost, tokens]) => React.createElement('div', {
           key: label,
-          style: { display: 'grid', gridTemplateColumns: '104px 1fr 96px', gap: 10, alignItems: 'center', fontSize: 12 },
+          style: { display: 'grid', gridTemplateColumns: '150px 1fr 84px', gap: 10, alignItems: 'center', fontSize: 12 },
         }, [
-          React.createElement('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 6, color: C.label2, whiteSpace: 'nowrap' } },
-            [React.createElement('i', { key: 'i', style: swatch(color) }), label]),
+          React.createElement('div', { key: 'n', style: { display: 'flex', flexDirection: 'column', gap: 1, color: C.label2, whiteSpace: 'nowrap' } }, [
+            React.createElement('span', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 6 } },
+              [React.createElement('i', { key: 'i', style: swatch(color) }), label]),
+            React.createElement('span', { key: 'k', style: { fontSize: 10, color: C.label3, marginLeft: 14, fontVariantNumeric: 'tabular-nums' } },
+              `${fmtM(tokens)} tokens`),
+          ]),
           React.createElement('div', {
             key: 'tr',
             style: { position: 'relative', height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
