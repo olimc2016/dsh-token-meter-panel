@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Token 用量面板 · 三色配色方案对比</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 32px 60px; background: #0b0d12; color: #e6e8ee;
+    font-family: system-ui, "Microsoft YaHei UI", "Segoe UI", sans-serif; font-size: 14px;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .sub { color: #98a1b3; font-size: 13px; margin-bottom: 24px; line-height: 1.7; }
+  .opt { border: 1px solid #232733; border-radius: 16px; padding: 18px 20px; margin-bottom: 20px; background: #12151c; }
+  .opt h2 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid #2c3242; color: #9aa4b8; }
+  .tag.rec { border-color: #2dd4bf; color: #2dd4bf; }
+  .why { color: #8b95a7; font-size: 12.5px; margin: 2px 0 14px; line-height: 1.6; }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { border-radius: 14px; padding: 14px 16px; min-width: 300px; flex: 1; }
+  .card.dark { background: #171b24; border: 1px solid #262c3a; }
+  .card.light { background: #f6f7f9; border: 1px solid #d8dce3; color: #1b1f27; }
+  .card h3 { font-size: 12px; margin: 0 0 12px; font-weight: 600; opacity: .75; }
+  .swatches { display: flex; gap: 10px; }
+  .sw { flex: 1; }
+  .chip { height: 44px; border-radius: 10px; }
+  .hex { font-size: 11px; margin-top: 6px; opacity: .75; font-family: ui-monospace, Consolas, monospace; }
+  .lbl { font-size: 12px; margin-top: 2px; }
+  .bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 14px 0 8px; }
+  .bar > div { display: flex; align-items: center; justify-content: center; font-size: 10px; color: #04070d; font-weight: 700; }
+  .legend { display: flex; gap: 14px; font-size: 12px; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 3px; }
+  .mini { display: flex; gap: 10px; margin-top: 14px; }
+  .mini div { flex: 1; border-radius: 10px; padding: 8px 10px; border: 1px solid; }
+  .mini .v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mini .t { font-size: 10.5px; opacity: .7; }
+  .cvd { margin-top: 12px; }
+  .cvd h4 { font-size: 11.5px; margin: 0 0 6px; font-weight: 600; opacity: .6; }
+  .note { color: #7f8a9e; font-size: 12px; line-height: 1.7; margin-top: 8px; }
+  a { color: #6ea8fe; }
+  .foot { color: #6f7a8d; font-size: 12px; line-height: 1.8; border-top: 1px solid #232733; padding-top: 16px; margin-top: 26px; }
+</style>
+</head>
+<body>
+<h1>Token 用量面板 · 三色配色方案</h1>
+<div class="sub">
+  三个颜色 = 缓存命中输入 / 未命中输入 / 输出。评判标准：<b>① 色相间隔够大（小色块并排能一眼分开）② 红绿色盲下仍可分 ③ 深浅主题都要好看</b>。<br>
+  每套都给「深色卡片 / 浅色卡片 / 色盲模拟」三行。看完告诉我选哪套（或哪套哪个色要换）。
+</div>
+
+<div id="app"></div>
+
+<div class="foot">
+  色盲模拟用 SVG feColorMatrix 近似（deuteranopia，红绿色盲中最常见的一种）。<br>
+  正式实现时不会写死这些色值，而是以 <code>color-mix()</code> 基于 DSH 的 <code>--dsw-*</code> 主题变量调和，保证跟随主题与无障碍设置。
+</div>
+
+<script>
+const OPTIONS = [
+  {
+    id: 'A', name: '现状（不建议继续用）', tag: '', rec: false,
+    why: '青 / 蓝 / 紫 三者色相只差 30~40°，在 9px 的图例色块和堆叠柱里几乎分不出；浅色主题下更糊。',
+    dark:  { hit: '#38BDF8', miss: '#60A5FA', out: '#A78BFA' },
+    light: { hit: '#0284C7', miss: '#2563EB', out: '#7C3AED' },
+  },
+  {
+    id: 'B', name: '青绿 / 琥珀 / 靛蓝', tag: '推荐', rec: true,
+    why: '色相 165° / 35° / 245°，两两间隔 ≥80°，图例和堆叠柱都一眼可分；绿=命中省钱、琥珀=未命中花钱，语义直觉一致。',
+    dark:  { hit: '#2DD4BF', miss: '#F59E0B', out: '#818CF8' },
+    light: { hit: '#0D9488', miss: '#B45309', out: '#4F46E5' },
+  },
+  {
+    id: 'C', name: '翠绿 / 玫红 / 天蓝', tag: '', rec: false,
+    why: '对比最强、最“跳”，但玫红在色盲模拟下会和翠绿趋同，且红色在用量面板里容易被读成“错误/超额”。',
+    dark:  { hit: '#34D399', miss: '#FB7185', out: '#60A5FA' },
+    light: { hit: '#059669', miss: '#E11D48', out: '#2563EB' },
+  },
+  {
+    id: 'D', name: '青 / 橙 / 紫', tag: '', rec: false,
+    why: '暖冷分明、观感活泼；缺点是橙与紫在浅色主题里都需要压暗才够对比，且和 DSH 自带品牌蓝有点撞。',
+    dark:  { hit: '#22D3EE', miss: '#F97316', out: '#A855F7' },
+    light: { hit: '#0891B2', miss: '#C2410C', out: '#7E22CE' },
+  },
+];
+
+const NAMES = ['缓存命中输入', '未命中输入', '输出'];
+const KEYS = ['hit', 'miss', 'out'];
+const PROPS = [90, 6, 4]; // 堆叠柱示意比例
+
+function swatches(p) {
+  return `<div class="swatches">${KEYS.map((k, i) => `
+    <div class="sw">
+      <div class="chip" style="background:${p[k]}"></div>
+      <div class="hex">${p[k]}</div>
+      <div class="lbl">${NAMES[i]}</div>
+    </div>`).join('')}</div>`;
+}
+
+function bar(p) {
+  return `<div class="bar">${KEYS.map((k, i) =>
+    `<div style="flex:${PROPS[i]};background:${p[k]}">${PROPS[i] > 10 ? '命中' : ''}</div>`).join('')}</div>
+  <div class="legend">${KEYS.map((k, i) =>
+    `<span><i class="dot" style="background:${p[k]}"></i>${NAMES[i]}</span>`).join('')}</div>`;
+}
+
+function mini(p, light) {
+  const edge = light ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.10)';
+  const bg = light ? '#ffffff' : '#1d222c';
+  return `<div class="mini">${KEYS.map((k, i) => `
+    <div style="background:${bg};border-color:${edge}">
+      <div class="t"><i class="dot" style="background:${p[k]};display:inline-block;margin-right:5px"></i>${NAMES[i]}</div>
+      <div class="v">${['322.1M', '1.75M', '508K'][i]}</div>
+    </div>`).join('')}</div>`;
+}
+
+function card(title, p, cls, light) {
+  return `<div class="card ${cls}">
+    <h3>${title}</h3>
+    ${swatches(p)}
+    ${bar(p)}
+    ${mini(p, light)}
+  </div>`;
+}
+
+document.getElementById('app').innerHTML = OPTIONS.map(o => `
+  <div class="opt">
+    <h2>${o.id}. ${o.name} ${o.tag ? `<span class="tag${o.rec ? ' rec' : ''}">${o.tag}</span>` : ''}</h2>
+    <div class="why">${o.why}</div>
+    <div class="row">
+      ${card('深色主题', o.dark, 'dark', false)}
+      ${card('浅色主题', o.light, 'light', true)}
+    </div>
+    <div class="cvd">
+      <h4>色盲模拟（红绿色盲近似）— 深色</h4>
+      <div style="filter:url(#deuteranopia)">${card('', o.dark, 'dark', false)}</div>
+    </div>
+  </div>`).join('') + `
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="deuteranopia">
+      <feColorMatrix type="matrix" values="0.625 0.375 0 0 0  0.70 0.30 0 0 0  0 0.30 0.70 0 0  0 0 0 1 0"/>
+    </filter>
+  </svg>`;
+</script>
+</body>
+</html>

@@ -233,9 +233,12 @@ const hhmm = (ms) => {
 const clock = (ms) => new Date(ms).toTimeString().slice(0, 8);
 
 const C = {
-  hit: '#3fb6c8',
-  miss: '#4d9bff',
-  out: '#8b7bff',
+  // 三色（方案 B：青绿 / 琥珀 / 靛蓝）—— 色相 165°/35°/245°，两两间隔 ≥80°，
+  // 图例 9px 小色块并排也能一眼分开；绿=命中省钱、琥珀=未命中花钱，语义直觉一致。
+  // 浅色主题对应值（#0D9488 / #B45309 / #4F46E5）待接入主题检测后切换。
+  hit: '#2DD4BF',
+  miss: '#F59E0B',
+  out: '#818CF8',
   warn: 'var(--dsw-alias-state-warn-primary, #e3b341)',
   error: 'var(--dsw-alias-state-error-primary, #f85149)',
   ok: 'var(--dsw-alias-state-success-primary, #3fb950)',
