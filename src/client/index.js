@@ -539,9 +539,13 @@ function TokenMeterPanel(props) {
   const cOut = (D.out / 1e6) * unit.out;
   // 成本构成显示哪一天：点了直方图就是那天，否则今天。有分档数据就按峰/谷分别计价。
   const SD = selDay && days[selDay] ? days[selDay] : D;
+  // 费率对象字段是 cacheHit / cacheMiss / output，不是 hit / miss / out ——
+  // 之前这里直接取 rateSet['hit'] → undefined → 金额算出 NaN（三行数字看着像"没刷新"）
+  const RATE_KEY = { hit: 'cacheHit', miss: 'cacheMiss', out: 'output' };
+  const rateOf = (set, which) => set?.[RATE_KEY[which]] ?? set?.[which] ?? unit[which];
   const costOf = (which) => {
     if (!SD.tier) return ((SD[which] ?? 0) / 1e6) * unit[which];
-    const at = (tier) => (((SD.tier[tier] ?? {})[which] ?? 0) / 1e6) * ((cfgRates?.[tier]?.['deepseek-flash'] ?? unit)[which]);
+    const at = (tier) => (((SD.tier[tier] ?? {})[which] ?? 0) / 1e6) * rateOf(cfgRates?.[tier]?.['deepseek-flash'], which);
     return at('peak') + at('offPeak');
   };
   const sHit = costOf('hit');
@@ -1148,11 +1152,6 @@ function TokenMeterPanel(props) {
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
         React.createElement('span', { key: 'tot', style: { color: C.label3, fontVariantNumeric: 'tabular-nums' } },
           `${t('fromOfficial')} ${money(SD.cny ?? 0)}`),
-        // 临时自检（定位「选日期后三行数值不变」用，查清后我会删掉）
-        React.createElement('span', { key: 'dbg', style: { color: C.warn, fontSize: 10, marginLeft: 10, fontVariantNumeric: 'tabular-nums' } },
-          `[sel=${selDay ?? 'null'} day=${selDay && days[selDay] ? 'y' : 'n'} tier=${SD.tier ? 'y' : 'n'} `
-          + `hit=${Math.round(SD.hit ?? -1)} miss=${Math.round(SD.miss ?? -1)} out=${Math.round(SD.out ?? -1)} `
-          + `cost=${sHit.toFixed(3)}/${sMiss.toFixed(3)}/${sOut.toFixed(3)} total=${splitTotal.toFixed(3)}]`),
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
