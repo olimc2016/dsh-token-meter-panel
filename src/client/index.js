@@ -999,7 +999,12 @@ function TokenMeterPanel(props) {
           total > 0
             ? React.createElement('div', {
               key: 's',
-              style: { height: `${h}%`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderRadius: '5px 5px 3px 3px', overflow: 'hidden' },
+              style: {
+                height: `${h}%`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+                borderRadius: '5px 5px 3px 3px', overflow: 'hidden',
+                // 数值很小的日子：收窄成"细柱子"而不是横贯整列的细线
+                width: h < 10 ? '46%' : '100%', alignSelf: 'center', minWidth: 6,
+              },
             }, [
               // 自上而下：输出 → 未命中 → 命中（命中在最底部，并在色带里标出命中率）
               React.createElement('div', { key: 'o', style: { flex: Math.max(entry.out, 1), minHeight: 3, background: C.out } }),
@@ -1141,6 +1146,8 @@ function TokenMeterPanel(props) {
             style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
           }, `↩ ${t('today')}`),
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
+        React.createElement('span', { key: 'tot', style: { color: C.label3, fontVariantNumeric: 'tabular-nums' } },
+          `${t('fromOfficial')} ${money(SD.cny ?? 0)}`),
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
