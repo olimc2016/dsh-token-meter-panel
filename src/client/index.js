@@ -548,8 +548,8 @@ function TokenMeterPanel(props) {
   const sMiss = costOf('miss');
   const sOut = costOf('out');
   const splitDay = selDay && days[selDay] ? selDay : today;
-  /** 成本构成里「占比」的分母：跟着选中的那天走（原来固定用今天的总额） */
-  const splitTotal = (sHit + sMiss + sOut) || (SD.cny ?? 0) || 1;
+  /** 「占比」分母 = 当前展示的这三项之和（统一来源，保证三者相加 ≈100%）；全为 0 时退回当天官方金额 */
+  const splitTotal = (sHit + sMiss + sOut) > 0 ? (sHit + sMiss + sOut) : ((SD.cny ?? 0) || 1);
   const actual = cHit + cMiss + cOut || D.cny || 0;
 
   // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
