@@ -1,0 +1,42 @@
+# 推 tag 即自动发布到 npm（Trusted Publishing / OIDC，无需任何 token）
+#
+# 首次使用前，需要在 npm 包设置里绑定一次 Trusted Publisher：
+#   https://www.npmjs.com/package/dsh-token-meter-panel/access
+#   → Trusted Publisher → GitHub Actions
+#     Organization or user: olimc2016
+#     Repository:            dsh-token-meter-panel
+#     Workflow filename:     publish.yml
+#     Environment:           （留空）
+#
+# 之后发版流程：改 package.json 版本号 → git tag vX.Y.Z → git push origin vX.Y.Z
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # OIDC 换取 npm 发布凭据，必需
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dev deps
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+      - name: Publish (with provenance)
+        run: npm publish --provenance --access public
