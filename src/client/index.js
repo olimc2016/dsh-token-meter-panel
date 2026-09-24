@@ -84,6 +84,7 @@ const zh = {
   'trend': '每日消费趋势',
   'byHour': '今日分时用量',
   'costSplit': '今日成本构成',
+  'clickForSplit': '点击可看当天成本构成',
   'sessions': '今日按会话明细',
   'session': '会话',
   'lastCall': '最近调用',
@@ -470,6 +471,8 @@ function TokenMeterPanel(props) {
 
   // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
   const [showRates, setShowRates] = React.useState(false);
+  /** 直方图点选的那一天（null = 今天）；成本构成跟着它变 */
+  const [selDay, setSelDay] = React.useState(null);
   const [copied, setCopied] = React.useState(false);
   const [showAllSessions, setShowAllSessions] = React.useState(false);
   // 自定义时间区间（null = 用近 7 / 30 天）
@@ -534,6 +537,17 @@ function TokenMeterPanel(props) {
   const cHit = (D.hit / 1e6) * unit.hit;
   const cMiss = (D.miss / 1e6) * unit.miss;
   const cOut = (D.out / 1e6) * unit.out;
+  // 成本构成显示哪一天：点了直方图就是那天，否则今天。有分档数据就按峰/谷分别计价。
+  const SD = selDay && days[selDay] ? days[selDay] : D;
+  const costOf = (which) => {
+    if (!SD.tier) return ((SD[which] ?? 0) / 1e6) * unit[which];
+    const at = (tier) => (((SD.tier[tier] ?? {})[which] ?? 0) / 1e6) * ((cfgRates?.[tier]?.['deepseek-flash'] ?? unit)[which]);
+    return at('peak') + at('offPeak');
+  };
+  const sHit = costOf('hit');
+  const sMiss = costOf('miss');
+  const sOut = costOf('out');
+  const splitDay = selDay && days[selDay] ? selDay : today;
   const actual = cHit + cMiss + cOut || D.cny || 0;
 
   // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
@@ -589,6 +603,13 @@ function TokenMeterPanel(props) {
   const trend_ = dataDays > 0 && dataDays < 3 && firstDataIdx > 0 ? window_.slice(firstDataIdx) : window_;
   const maxHour = Math.max(...(D.byHour ?? [0]), 1);
   const peakHour = (D.byHour ?? []).indexOf(maxHour);
+  // 今天每小时是否属于高峰（北京时间，工作日 9-12、14-18）——分时图用两色区分峰/谷
+  const peakHoursToday = (() => {
+    const bj = new Date(Date.now() + 8 * 3600e3);
+    const dow = bj.getUTCDay();
+    const weekend = dow === 0 || dow === 6;
+    return Array.from({ length: 24 }, (_, h) => !weekend && ((h >= 9 && h < 12) || (h >= 14 && h < 18)));
+  })();
 
   // 今日会话
   const todaySessions = Object.values(data.sessions ?? {})
@@ -951,10 +972,12 @@ function TokenMeterPanel(props) {
           : `${label} · ${t('zeroDays')}`;
         return React.createElement('div', {
           key,
-          title: tip,
+          title: `${tip}${'\n'}${t('clickForSplit')}`,
+          onClick: () => setSelDay(selDay === key ? null : key),
           style: {
             flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            outline: isToday ? `1px dashed ${C.brand}` : 'none', outlineOffset: 2, borderRadius: 6, minWidth: 0,
+            outline: (selDay ? selDay === key : isToday) ? `1px dashed ${C.brand}` : 'none', outlineOffset: 2,
+            borderRadius: 6, minWidth: 0, cursor: 'pointer',
             maxWidth: trend_.length <= 4 ? 78 : 'none', position: 'relative',
           },
         }, [
@@ -1048,8 +1071,9 @@ function TokenMeterPanel(props) {
               position: 'relative', zIndex: 1,
               flex: 1, minHeight: 2,
               height: `${Math.max(((D.byHour?.[h] ?? 0) / maxHour) * 100, 1.5)}%`,
-              background: h === peakHour ? 'var(--dsw-alias-state-business-primary, #25d0e0)' : C.miss,
-              opacity: h === peakHour ? 1 : 0.55,
+              // 峰/谷用两色区分：高峰（工作日 9-12、14-18 北京时间）暖色，空闲冷色
+              background: peakHoursToday[h] ? C.miss : C.hit,
+              opacity: h === peakHour ? 1 : 0.72,
               borderRadius: '2px 2px 0 0',
             },
           })),
@@ -1105,14 +1129,23 @@ function TokenMeterPanel(props) {
         key: 'h',
         style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3, flexWrap: 'wrap' },
       }, [
-        React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('costSplit')),
+        React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } },
+          splitDay === today ? t('costSplit') : `${t('costSplit')} · ${splitDay.slice(5)}`),
+        splitDay === today
+          ? null
+          : React.createElement('span', {
+            key: 'back',
+            onClick: () => setSelDay(null),
+            style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
+          }, `↩ ${t('today')}`),
         React.createElement('span', { key: 'sp', style: { flex: 1 } }),
       ]),
       React.createElement('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 } },
         [
-          [t('hitInput'), C.hit, cHit],
-          [t('missInput'), C.miss, cMiss],
-          [t('output'), C.out, cOut],
+          // 顺序与直方图堆叠一致：输出 → 未命中 → 缓存命中
+          [t('output'), C.out, sOut],
+          [t('missInput'), C.miss, sMiss],
+          [t('hitInput'), C.hit, sHit],
         ].map(([label, color, cost]) => React.createElement('div', {
           key: label,
           style: { display: 'grid', gridTemplateColumns: '104px 1fr 96px', gap: 10, alignItems: 'center', fontSize: 12 },
