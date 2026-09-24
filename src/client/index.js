@@ -548,6 +548,8 @@ function TokenMeterPanel(props) {
   const sMiss = costOf('miss');
   const sOut = costOf('out');
   const splitDay = selDay && days[selDay] ? selDay : today;
+  /** 成本构成里「占比」的分母：跟着选中的那天走（原来固定用今天的总额） */
+  const splitTotal = (sHit + sMiss + sOut) || (SD.cny ?? 0) || 1;
   const actual = cHit + cMiss + cOut || D.cny || 0;
 
   // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
@@ -1156,14 +1158,14 @@ function TokenMeterPanel(props) {
             key: 'tr',
             style: { height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))', overflow: 'hidden' },
           }, React.createElement('div', {
-            style: { height: '100%', width: `${pct(cost, actual).toFixed(1)}%`, background: color, borderRadius: 99 },
+            style: { height: '100%', width: `${pct(cost, splitTotal).toFixed(1)}%`, background: color, borderRadius: 99 },
           })),
           React.createElement('div', {
             key: 'v',
             style: { textAlign: 'right', color: C.label2, fontVariantNumeric: 'tabular-nums' },
           }, [
             React.createElement('b', { key: 'b', style: { color: C.label } }, money(cost)),
-            React.createElement('span', { key: 'p', style: { color: C.label3, marginLeft: 6 } }, `${pct(cost, actual).toFixed(0)}%`),
+            React.createElement('span', { key: 'p', style: { color: C.label3, marginLeft: 6 } }, `${pct(cost, splitTotal).toFixed(0)}%`),
           ]),
         ]))),
     ]),
