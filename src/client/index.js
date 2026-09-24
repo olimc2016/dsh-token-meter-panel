@@ -1107,8 +1107,12 @@ function TokenMeterPanel(props) {
         ]),
         React.createElement('div', {
           key: 'ax',
-          style: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.label3, marginTop: 4 },
-        }, ['00', '06', '12', '18', '23'].map((s) => React.createElement('span', { key: s }, s))),
+          // 24 个小时都标出来，且与柱子同布局（同样 flex:1 + gap:2）→ 每个刻度正好居中在对应柱子下方
+          style: { display: 'flex', gap: 2, fontSize: 9, color: C.label3, marginTop: 4 },
+        }, Array.from({ length: 24 }, (_, h) => React.createElement('span', {
+          key: h,
+          style: { flex: 1, minWidth: 0, textAlign: 'center', fontVariantNumeric: 'tabular-nums' },
+        }, String(h).padStart(2, '0')))),
       ]),
     ]),
 
