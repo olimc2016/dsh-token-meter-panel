@@ -12,9 +12,12 @@
 name: publish
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # 注意：npm 侧 Trusted Publisher 还没绑定，所以暂时**只允许手动触发**，避免推 tag 时出现红色失败。
+  # 绑定完成后（https://www.npmjs.com/package/dsh-token-meter-panel/access → Trusted Publisher），
+  # 把下面 push.tags 注释恢复，即可实现「推 tag 自动发版」。
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
 
 permissions:
