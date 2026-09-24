@@ -1187,17 +1187,27 @@ function TokenMeterPanel(props) {
             [React.createElement('i', { key: 'i', style: swatch(color) }), label]),
           React.createElement('div', {
             key: 'tr',
-            style: { height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))', overflow: 'hidden' },
-          }, React.createElement('div', {
-            style: { height: '100%', width: `${pct(cost, splitTotal).toFixed(1)}%`, background: color, borderRadius: 99 },
-          })),
+            style: { position: 'relative', height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
+          }, (() => {
+            const p = pct(cost, splitTotal);
+            const wide = p >= 55; // 彩条够长就把百分比写在条内，否则写在条的右边一点点
+            return [
+              React.createElement('div', {
+                key: 'fill',
+                style: { height: '100%', width: `${p.toFixed(1)}%`, background: color, borderRadius: 99 },
+              }),
+              React.createElement('span', {
+                key: 'p',
+                style: wide
+                  ? { position: 'absolute', right: 6, top: -3, fontSize: 11, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums' }
+                  : { position: 'absolute', left: `calc(${p.toFixed(1)}% + 6px)`, top: -3, fontSize: 11, fontWeight: 600, color: C.label2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' },
+              }, `${p.toFixed(0)}%`),
+            ];
+          })()),
           React.createElement('div', {
             key: 'v',
             style: { textAlign: 'right', color: C.label2, fontVariantNumeric: 'tabular-nums' },
-          }, [
-            React.createElement('b', { key: 'b', style: { color: C.label } }, money(cost)),
-            React.createElement('span', { key: 'p', style: { color: C.label3, marginLeft: 6 } }, `${pct(cost, splitTotal).toFixed(0)}%`),
-          ]),
+          }, React.createElement('b', { key: 'b', style: { color: C.label } }, money(cost))),
         ]))),
     ]),
 
