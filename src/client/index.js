@@ -1201,19 +1201,24 @@ function TokenMeterPanel(props) {
           // ③ 金额
           React.createElement('div', { key: 'v', style: { textAlign: 'right', fontWeight: 650, color: C.label, fontVariantNumeric: 'tabular-nums' } },
             money(cost)),
-          // ④ 彩条 + 比例：比例固定在彩条右侧的独立小列，三行位置一致、绝不被条压住
-          React.createElement('div', { key: 'tr', style: { display: 'flex', alignItems: 'center', gap: 7 } }, [
+          // ④ 彩条 + 比例：比例永远贴在「彩条末端右侧 6px」——同一条规则，位置跟着条走
+          React.createElement('div', { key: 'tr', style: { display: 'flex', alignItems: 'center', paddingRight: 40 } }, [
             React.createElement('div', {
               key: 'track',
               style: { position: 'relative', flex: 1, minWidth: 0, height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
-            }, React.createElement('div', {
-              key: 'fill',
-              style: { height: '100%', width: `${pct(cost, splitTotal).toFixed(1)}%`, background: color, borderRadius: 99 },
-            })),
-            React.createElement('span', {
-              key: 'p',
-              style: { width: 34, textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.label2, fontVariantNumeric: 'tabular-nums', flex: 'none' },
-            }, `${pct(cost, splitTotal).toFixed(0)}%`),
+            }, [
+              React.createElement('div', {
+                key: 'fill',
+                style: { height: '100%', width: `${pct(cost, splitTotal).toFixed(1)}%`, background: color, borderRadius: 99 },
+              }),
+              React.createElement('span', {
+                key: 'p',
+                style: {
+                  position: 'absolute', left: `calc(${pct(cost, splitTotal).toFixed(1)}% + 6px)`, top: -3,
+                  fontSize: 11, fontWeight: 600, color: C.label2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                },
+              }, `${pct(cost, splitTotal).toFixed(0)}%`),
+            ]),
           ]),
         ]))),
     ]),
