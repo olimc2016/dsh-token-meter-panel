@@ -1190,20 +1190,24 @@ function TokenMeterPanel(props) {
           [t('hitInput'), C.hit, sHit, tokOf('hit')],
         ].map(([label, color, cost, tokens]) => React.createElement('div', {
           key: label,
-          style: { display: 'grid', gridTemplateColumns: '150px 1fr 84px', gap: 10, alignItems: 'center', fontSize: 12 },
+          style: { display: 'grid', gridTemplateColumns: '112px 84px 76px 1fr', gap: 10, alignItems: 'center', fontSize: 12 },
         }, [
-          React.createElement('div', { key: 'n', style: { display: 'flex', flexDirection: 'column', gap: 1, color: C.label2, whiteSpace: 'nowrap' } }, [
-            React.createElement('span', { key: 'l', style: { display: 'flex', alignItems: 'center', gap: 6 } },
-              [React.createElement('i', { key: 'i', style: swatch(color) }), label]),
-            React.createElement('span', { key: 'k', style: { fontSize: 10, color: C.label3, marginLeft: 14, fontVariantNumeric: 'tabular-nums' } },
-              `${fmtM(tokens)} tokens`),
-          ]),
+          // ① 名称
+          React.createElement('div', { key: 'n', style: { display: 'flex', alignItems: 'center', gap: 6, color: C.label2, whiteSpace: 'nowrap' } },
+            [React.createElement('i', { key: 'i', style: swatch(color) }), label]),
+          // ② token 量
+          React.createElement('div', { key: 'k', style: { textAlign: 'right', fontSize: 11, color: C.label3, fontVariantNumeric: 'tabular-nums' } },
+            fmtM(tokens)),
+          // ③ 金额
+          React.createElement('div', { key: 'v', style: { textAlign: 'right', fontWeight: 650, color: C.label, fontVariantNumeric: 'tabular-nums' } },
+            money(cost)),
+          // ④ 彩条 + 比例（比例一定落在这一栏内：条够长就写在条里，否则贴在条尾右侧）
           React.createElement('div', {
             key: 'tr',
             style: { position: 'relative', height: 9, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.18))' },
           }, (() => {
             const p = pct(cost, splitTotal);
-            const wide = p >= 55; // 彩条够长就把百分比写在条内，否则写在条的右边一点点
+            const wide = p >= 45;
             return [
               React.createElement('div', {
                 key: 'fill',
@@ -1212,15 +1216,11 @@ function TokenMeterPanel(props) {
               React.createElement('span', {
                 key: 'p',
                 style: wide
-                  ? { position: 'absolute', right: 6, top: -3, fontSize: 11, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums' }
-                  : { position: 'absolute', left: `calc(${p.toFixed(1)}% + 6px)`, top: -3, fontSize: 11, fontWeight: 600, color: C.label2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' },
+                  ? { position: 'absolute', top: -3, left: `calc(${p.toFixed(1)}% - 36px)`, fontSize: 11, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums' }
+                  : { position: 'absolute', top: -3, left: `calc(${p.toFixed(1)}% + 6px)`, fontSize: 11, fontWeight: 600, color: C.label2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' },
               }, `${p.toFixed(0)}%`),
             ];
           })()),
-          React.createElement('div', {
-            key: 'v',
-            style: { textAlign: 'right', color: C.label2, fontVariantNumeric: 'tabular-nums' },
-          }, React.createElement('b', { key: 'b', style: { color: C.label } }, money(cost))),
         ]))),
     ]),
 
