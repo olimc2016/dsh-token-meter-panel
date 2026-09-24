@@ -945,15 +945,18 @@ function TokenMeterPanel(props) {
             maxWidth: trend_.length <= 4 ? 78 : 'none', position: 'relative',
           },
         }, [
-          trend_.length <= 4 && total > 0
+          total > 0
             ? React.createElement('div', {
               key: 'val',
               style: {
                 position: 'absolute', left: 0, right: 0, bottom: `calc(${h}% + 5px)`, textAlign: 'center',
-                fontSize: 10.5, fontWeight: 600, color: isToday ? C.brand : C.label2,
+                fontSize: trend_.length <= 7 ? 10.5 : 9.5, fontWeight: 600, color: isToday ? C.brand : C.label2,
                 fontVariantNumeric: 'tabular-nums', pointerEvents: 'none', whiteSpace: 'nowrap',
+                overflow: 'visible',
               },
-            }, money(entry.cny))
+            }, entry.cny > 0
+              ? (trend_.length <= 7 ? money(entry.cny) : `¥${Math.round(entry.cny)}`)
+              : '')
             : null,
           total > 0
             ? React.createElement('div', {
