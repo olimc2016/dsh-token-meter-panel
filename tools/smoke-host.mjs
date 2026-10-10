@@ -55,7 +55,7 @@ const ctx = {
         bonusWallets: [{ currency: 'CNY', balance: '1.66' }],
       };
     },
-    // 累计消费：宿主用同一把账号会话自己去取 /api/v0/users/get_user_summary
+    // 官方用量：桌面端账号会话（x-dsh-auth-token，免网页登录）
     async getPlatformSession() {
       return {
         origin: 'https://platform.deepseek.com',
@@ -156,10 +156,18 @@ if (bal) {
     return { status, payload: JSON.parse(body)?.data };
   };
 
-  // 打桩：宿主取累计消费会请求 get_user_summary，别让烟测打真网络
+  // 打桩：宿主取累计消费会请求 get_user_summary、取官方用量会请求 by_api_key/*，都别打真网络
   const realFetchForAccount = globalThis.fetch;
+  const usageEmpty = (bucket) => ({
+    code: 0,
+    data: { biz_code: 0, biz_data: { start: 0, end: 0, bucket, models: ['deepseek-flash'], series: [], data: [] } },
+  });
   globalThis.fetch = async (url, init) => {
     const target = String(url);
+    if (target.includes('/api/v0/usage/by_api_key/')) {
+      if (init?.headers?.['x-dsh-auth-token'] !== 'acct-session-token') throw new Error('官方用量没有走账号会话头 x-dsh-auth-token');
+      return { ok: true, status: 200, json: async () => usageEmpty(target.includes('tz=') && Number(new URL(target).searchParams.get('start')) + 86400 >= Number(new URL(target).searchParams.get('end')) ? 3600 : 86400) };
+    }
     if (!target.includes('/api/v0/users/get_user_summary')) throw new Error(`unexpected fetch: ${target}`);
     if (init?.headers?.['x-dsh-auth-token'] !== 'acct-session-token') throw new Error('累计消费没有带账号会话 token');
     return {
@@ -168,7 +176,6 @@ if (bal) {
     };
   };
   const account = await call('/token-meter-panel/balance?locale=zh-CN&refresh=1');
-  globalThis.fetch = realFetchForAccount;
   const info = account.payload?.balance_infos?.[0];
   const accountOk = account.payload?.ok === true
     && account.payload?.source === 'account'
@@ -327,5 +334,43 @@ async function callRoute(ctxRoutes, path, url, method = 'GET') {
 // 卸载：disposer 应把路由摘干净
 for (const e of effects) e.dispose?.();
 console.log(`\nafter dispose: routes=${routes.length} (expect 0)`);
+  // ---- 官方用量：账号会话（x-dsh-auth-token，免网页登录）----
+  {
+    console.log('\n-- 官方用量（账号会话，免登录） --');
+    const realFetch = globalThis.fetch;
+    const hits = [];
+    globalThis.fetch = async (url, init) => {
+      const target = String(url);
+      if (!target.includes('/api/v0/usage/by_api_key/')) throw new Error(`unexpected fetch: ${target}`);
+      hits.push(init?.headers?.['x-dsh-auth-token']);
+      return {
+        ok: true, status: 200,
+        json: async () => ({ code: 0, data: { biz_code: 0, biz_data: { start: 1, end: 2, bucket: 86400, models: ['deepseek-flash'], series: [], data: [{ currency: 'CNY', series: [] }] } } }),
+      };
+    };
+    try {
+      const { ctx: ctxG, routes: rG } = newCtx({
+        account: {
+          async getBalance() { return { status: 'ready', value: [{ currency: 'CNY', balance: '5' }], bonusWallets: [] }; },
+          async getPlatformSession() { return { origin: 'https://platform.deepseek.com', token: 'acct-session-token', requestHeaders: {} }; },
+        },
+      });
+      await mod.apply(ctxG, {});
+      await new Promise((r) => setTimeout(r, 60));
+      await callRoute(rG, '/summary', '/token-meter-panel/summary?refresh=1');
+      await new Promise((r) => setTimeout(r, 300));
+      const got = await callRoute(rG, '/summary', '/token-meter-panel/summary');
+      const off = got.payload?.official ?? {};
+      const ok = off.ok === true && off.auth === 'account' && hits.length > 0 && hits.every((h) => h === 'acct-session-token');
+      console.log(`  ${ok ? 'PASS' : 'FAIL'} official.ok=${off.ok} auth=${off.auth} reason=${off.reason ?? '-'} 请求数=${hits.length}`);
+      if (!ok) smokeFailures += 1;
+    } catch (error) {
+      console.log(`  FAIL 官方用量（账号会话）：${error?.message ?? error}`);
+      smokeFailures += 1;
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
 console.log(smokeFailures === 0 ? 'HOST SMOKE OK' : `HOST SMOKE FAILED (${smokeFailures})`);
 if (smokeFailures > 0) process.exit(1);

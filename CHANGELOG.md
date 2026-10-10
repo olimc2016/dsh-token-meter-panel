@@ -85,6 +85,24 @@
   客户端 bundle id / slot id 全都不同」，再在孪生包目录内跑一遍它自己的 smoke-host、
   smoke-client、聚合回归 —— 已挂进 `npm test`（CI 的 ubuntu + windows 都会跑）。
 
+### 官方用量：账号会话直连（彻底不用登录，30 天真实数据）
+
+**这是这一版最重要的修复。** 之前「官方用量」只支持浏览器 `userToken`（`authorization: Bearer`），
+所以桌面端用户永远显示「未连接」。真相是：DSH 桌面端内嵌的官方用量页根本不用网页登录 ——
+`apps/desktop/src/platform-view.ts` 把**账号会话**注入到发往 platform.deepseek.com 的请求里，
+并通过 `window.dsh.getAuthToken()` 交给页面；用的就是 `deepseekAccount.getPlatformSession()` 那把 token，
+**和插件取余额用的是同一把**。
+
+- 宿主新增**账号会话取数**（首选）：`x-dsh-auth-token: <账号会话 token>` + 官方那 5 个客户端头
+  （`x-client-bundle-id`（故意为空）/`x-client-platform: desktop-mac|desktop-win|web`/
+  `x-client-version`/`x-client-locale`/`x-client-timezone-offset`），与内嵌页注入的完全一致。
+  失败才回退浏览器 `userToken`（Bearer），保留 Web 场景兼容。
+- 实测（真机，零登录）：`official.ok=true，auth=account`，30 天按天数据 + 按模型 + 请求数全部返回，
+  且与本地日志的今日花费逐分对得上。
+- 失败时把账号路径的错误码带进 payload（`accountError`），便于诊断，不再静默。
+- `tools/smoke-host.mjs` 新增离线断言：官方用量必须走账号会话、且请求确实带 `x-dsh-auth-token`
+  （用独立 ctx + fetch 桩，不打真网络）。
+
 ### 官方累计消费（无需任何登录）
 
 - 面板第一栏余额下方新增一行**累计消费**：数据来自 `GET /api/v0/users/get_user_summary` 的
