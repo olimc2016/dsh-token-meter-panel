@@ -182,6 +182,89 @@ function packBucket(b) {
   };
 }
 
+/** 把 src 桶累加进 dst —— 用于缓存复用：每个文件的贡献单独算，命中缓存时直接合并。 */
+function mergeBucket(dst, src) {
+  dst.miss += src.miss; dst.hit += src.hit; dst.out += src.out;
+  dst.cacheWrite += src.cacheWrite; dst.reasoning += src.reasoning;
+  dst.calls += src.calls; dst.cny += src.cny;
+  dst.peakCalls += src.peakCalls; dst.unpricedCalls += src.unpricedCalls;
+  if (src.firstTime != null && (dst.firstTime == null || src.firstTime < dst.firstTime)) dst.firstTime = src.firstTime;
+  if (src.lastTime != null && (dst.lastTime == null || src.lastTime > dst.lastTime)) dst.lastTime = src.lastTime;
+  for (let i = 0; i < 24; i += 1) dst.byHour[i] += src.byHour[i];
+  for (const tier of ['peak', 'offPeak']) {
+    const a = dst.tier[tier], b = src.tier[tier];
+    a.hit += b.hit; a.miss += b.miss; a.out += b.out; a.cny += b.cny; a.calls += b.calls;
+  }
+  for (const [m, n] of src.models) dst.models.set(m, (dst.models.get(m) || 0) + n);
+}
+
+/**
+ * 算「一个会话日志文件」对总量的贡献，与全局状态无关 —— 因此可以按 (mtimeMs, size) 缓存：
+ * 文件没变就直接合并上次的结果，跳过解压与解析（工作机上全量重扫曾要 70 秒）。
+ * @param {object[]} records 该文件的记录
+ * @param {{rates:object, includeOtherProviders:boolean, billingProviders:string[]}} opts
+ * @param {object} f 文件描述（workspace/sessionId）
+ */
+function contributionOf(records, opts, f) {
+  const { rates, includeOtherProviders, billingProviders } = opts;
+  const days = new Map();
+  const models = new Map();
+  const providers = new Map();
+  const bucket = blankBucket();
+  bucket.id = f.sessionId;
+  bucket.workspace = f.workspace;
+  bucket.title = null;
+  bucket.createdAt = null;
+  bucket.delegationDepth = 0;
+  bucket.parentId = null;
+  bucket.agentLabel = null;
+  let calls = 0;
+  let unpriced = 0;
+
+  for (const rec of records) {
+    if (rec.type === 'session') {
+      bucket.createdAt = rec.createdAt ?? rec.time ?? null;
+      bucket.delegationDepth = rec.delegationDepth ?? 0;
+      bucket.parentId = rec.parentSession ?? null;
+      continue;
+    }
+    if (rec.type === 'subagent/descriptor') {
+      bucket.agentLabel = rec.data?.label ?? rec.data?.description ?? bucket.agentLabel;
+      continue;
+    }
+    if (rec.type === 'session/title' && rec.data?.title) {
+      bucket.title = rec.data.title;
+      continue;
+    }
+    const got = usageOf(rec);
+    if (!got) continue;
+    const provider = got.source?.provider ?? 'unknown';
+    const model = got.source?.model ?? 'unknown';
+    const billed = billingProviders.includes(provider);
+    if (!billed && !includeOtherProviders) continue;
+
+    calls += 1;
+    const cost = billed ? costOf(got.usage, model, got.time, rates) : null;
+    if (billed && !cost) unpriced += 1;
+    const tokens = (got.usage.inputTokens || 0) + (got.usage.cacheReadTokens || 0) + (got.usage.outputTokens || 0);
+
+    const dk = dayKeyOf(got.time);
+    if (!days.has(dk)) days.set(dk, blankBucket());
+    accumulate(days.get(dk), got.usage, model, got.time, cost);
+    accumulate(bucket, got.usage, model, got.time, cost);
+
+    const mk = `${provider} | ${model}`;
+    if (!models.has(mk)) models.set(mk, blankBucket());
+    accumulate(models.get(mk), got.usage, model, got.time, cost);
+
+    const pt = providers.get(provider) ?? { calls: 0, tokens: 0, cny: 0 };
+    pt.calls += 1; pt.tokens += tokens; pt.cny += cost ? cost.cny : 0;
+    providers.set(provider, pt);
+  }
+  bucket.isSubagent = bucket.delegationDepth > 0;
+  return { key: `${f.workspace}/${f.sessionId}`, session: bucket, days, models, providers, calls, unpriced };
+}
+
 /**
  * 会话日志文件名 → 格式代际。
  * 官方持久化布局（@deepseek-ai/dsh-session-persistence-jsonl）：
@@ -205,9 +288,11 @@ function generationOf(name) {
  * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.vN].jsonl[.zstd]
  * （兼容工作区目录下直接放文件的形态）
  * @param {string} sessionsRoot 会话根目录
- * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number}} [options]
+ * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number, cache?:Map}} [options]
+ *        cache 为一个可复用的 Map<file, {mtimeMs,size,signature,contribution}>：调用方跨次保留它，
+ *        未变动的日志文件会被直接复用（filesReused 报告命中数），已变动的重算。
  */
-export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0 } = {}) {
+export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0, cache = null } = {}) {
   const files = [];
   const listEntries = (p) => {
     try {
@@ -259,8 +344,31 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
   const sessions = new Map();
   const models = new Map();
   const providerTotals = new Map();
-  let calls = 0, unpriced = 0, unreadable = 0;
+  let calls = 0, unpriced = 0, unreadable = 0, reused = 0;
   let newestMtime = 0;
+
+  // 缓存的键里必须带「计价口径」签名：费率/口径变了，旧的贡献就不能再用（否则改了设置不生效）。
+  const signature = JSON.stringify([rates, includeOtherProviders, billingProviders]);
+  const contributionOpts = { rates, includeOtherProviders, billingProviders };
+
+  const merge = (c) => {
+    for (const [k, v] of c.days) {
+      if (!days.has(k)) days.set(k, blankBucket());
+      mergeBucket(days.get(k), v);
+    }
+    for (const [k, v] of c.models) {
+      if (!models.has(k)) models.set(k, blankBucket());
+      mergeBucket(models.get(k), v);
+    }
+    for (const [k, v] of c.providers) {
+      const t = providerTotals.get(k) ?? { calls: 0, tokens: 0, cny: 0 };
+      t.calls += v.calls; t.tokens += v.tokens; t.cny += v.cny;
+      providerTotals.set(k, t);
+    }
+    calls += c.calls;
+    unpriced += c.unpriced;
+    sessions.set(c.key, c.session);
+  };
 
   // 时间预算：会话日志可能非常大（几十上百个文件、单个几百 MB），全量解压会把首屏拖到一分钟以上。
   // kept 已按 mtime 倒序（最新优先），所以超预算直接停手，保住"最近/今天"这部分数据。
@@ -271,75 +379,34 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
   for (const f of kept) {
     if (Date.now() > deadline) { partialScan = true; break; }
     scanned += 1;
+    if (f.mtimeMs > newestMtime) newestMtime = f.mtimeMs;
+
+    const cached = cache instanceof Map ? cache.get(f.file) : undefined;
+    if (cached && cached.mtimeMs === f.mtimeMs && cached.size === f.size && cached.signature === signature) {
+      reused += 1;
+      merge(cached.contribution);
+      continue;
+    }
+
     let records;
     try {
       records = readSessionRecords(f.file);
     } catch (error) {
+      // 读不出来的文件仍然出一个（空的）会话条目，与旧行为一致；但**不写缓存**，下次还会重试
       unreadable += 1;
-      records = [];
+      merge(contributionOf([], contributionOpts, f));
+      continue;
     }
-    if (f.mtimeMs > newestMtime) newestMtime = f.mtimeMs;
-
-    const sBucket = blankBucket();
-    sBucket.id = f.sessionId;
-    sBucket.workspace = f.workspace;
-    sBucket.title = null;
-    sBucket.createdAt = null;
-    sBucket.delegationDepth = 0;
-    sBucket.parentId = null;
-    sBucket.agentLabel = null;
-
-    for (const rec of records) {
-      if (rec.type === 'session') {
-        sBucket.createdAt = rec.createdAt ?? rec.time ?? null;
-        sBucket.delegationDepth = rec.delegationDepth ?? 0;
-        sBucket.parentId = rec.parentSession ?? null;
-        continue;
-      }
-      if (rec.type === 'subagent/descriptor') {
-        sBucket.agentLabel = rec.data?.label ?? rec.data?.description ?? sBucket.agentLabel;
-        continue;
-      }
-      if (rec.type === 'session/title' && rec.data?.title) {
-        sBucket.title = rec.data.title;
-        continue;
-      }
-      const got = usageOf(rec);
-      if (!got) continue;
-      const provider = got.source?.provider ?? 'unknown';
-      const model = got.source?.model ?? 'unknown';
-      const billed = billingProviders.includes(provider);
-      if (!billed && !includeOtherProviders) continue;
-
-      calls += 1;
-      const cost = billed ? costOf(got.usage, model, got.time, rates) : null;
-      if (billed && !cost) unpriced += 1;
-      const tk = (got.usage.inputTokens || 0) + (got.usage.cacheReadTokens || 0) + (got.usage.outputTokens || 0);
-
-      const dk = dayKeyOf(got.time);
-      if (!days.has(dk)) days.set(dk, blankBucket());
-      const day = days.get(dk);
-      accumulate(day, got.usage, model, got.time, cost);
-      accumulate(sBucket, got.usage, model, got.time, cost);
-
-      const mk = `${provider} | ${model}`;
-      if (!models.has(mk)) models.set(mk, blankBucket());
-      accumulate(models.get(mk), got.usage, model, got.time, cost);
-
-      const pk = provider;
-      if (!providerTotals.has(pk)) providerTotals.set(pk, { calls: 0, tokens: 0, cny: 0 });
-      const pt = providerTotals.get(pk);
-      pt.calls += 1; pt.tokens += tk; pt.cny += cost ? cost.cny : 0;
-    }
-
-    sBucket.isSubagent = sBucket.delegationDepth > 0;
-    sessions.set(f.sessionId, sBucket);
+    const contribution = contributionOf(records, contributionOpts, f);
+    if (cache instanceof Map) cache.set(f.file, { mtimeMs: f.mtimeMs, size: f.size, signature, contribution });
+    merge(contribution);
   }
 
   return {
     generatedAt: Date.now(),
     sessionsRoot,
     filesScanned: scanned,
+    filesReused: reused,
     filesSkippedAsStale: skipped.map((f) => f.sessionId),
     unreadableFiles: unreadable,
     newestSourceMtime: newestMtime || null,

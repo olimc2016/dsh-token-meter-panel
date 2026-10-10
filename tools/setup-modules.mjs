@@ -30,6 +30,9 @@ const profileDir = process.env.DSH_PROFILE_DIR
 const wanted = [
   ['@deepseek-ai/schemastery', [join(profileDir, 'node_modules', '@deepseek-ai', 'schemastery')]],
   ['@deepseek-ai/cosmokit', [join(profileDir, 'node_modules', '@deepseek-ai', 'cosmokit')]],
+  // 官方家目录解析库（与整个 harness 共用同一套 $DSH_HOME/~/.dsh 规则）；
+  // 缺失时插件会退回等价实现，不影响使用
+  ['@deepseek-ai/dsh-home-paths', [join(profileDir, 'node_modules', '@deepseek-ai', 'dsh-home-paths')]],
   ['esbuild', [
     process.env.DSH_ESBUILD,
     join(repo, 'node_modules', 'esbuild'),

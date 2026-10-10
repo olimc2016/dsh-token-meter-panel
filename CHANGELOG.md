@@ -45,6 +45,38 @@
 - 新增 CI [.github/workflows/test.yml](.github/workflows/test.yml)：ubuntu + windows 各跑一遍 `npm test`。
 - 去掉 `sliceDays` 里一行无用代码。
 
+### 性能
+
+- **增量扫描**：`aggregate()` 支持传入可复用的文件级缓存（宿主跨次保留）。会话日志文件按
+  `(mtimeMs, size)` 判定，未变动就直接复用上次算出的贡献，只重新解压/解析变动过的文件；
+  缓存键里带「计价口径签名」，所以改了费率或 provider 口径会整体失效（不会读到旧价）。
+  结果里新增 `filesReused`。首屏仍是全量扫描，但之后的自动刷新从「全量重扫」变成「只读增量」——
+  工作机上曾要 70 秒的场景，现在只受时间预算 `scanBudgetMs` 约束。
+- 新增设置项 `scanBudgetMs`（此前代码在读它，但 schema 里没有，等于不可配置）。
+
+### 生态
+
+- **会话根目录改走官方规则**：优先用官方库 [`@deepseek-ai/dsh-home-paths`](https://www.npmjs.com/package/@deepseek-ai/dsh-home-paths)
+  （显式配置 > `$DSH_HOME` > `~/.dsh`，空白环境变量视为未设置、支持 `~` 展开），
+  解析不到时退回等价实现。已加入 `dependencies`，`tools/setup-modules.mjs` 会为本地开发建立链接。
+  导出 `resolveSessionsRoot()` 供测试与复用。
+- **`inject` 收窄为 `['webServer']`**：按官方《services and dependencies》的约定，可选依赖不写进
+  `inject`（`settings` 一直是通过 `ctx.inject` 探测的，写进必需列表会让缺该服务的组合整体加载失败）。
+- `/health` 增加 `accountService` 字段，便于确认官方账号服务是否在位。
+
+### 文案
+
+- **「官方用量」提示改为事实性说明**：原文案「首次会打开官方网页，未登录请先在页面里登录，
+  回来即自动生效」在机制上只对 Chromium 系浏览器成立（Safari/Firefox 的登录态读不到），
+  且余额与本地花费已经不需要这一步。现在写成
+  「可选：需在 Chrome/Edge 等 Chromium 浏览器里登录 platform.deepseek.com（Safari/Firefox 的登录态读不到）。
+  余额与本地花费不需要这一步」，状态也从「未连接」改为「未连接（可选）」。
+- 新增 `no-browser` 失败态：机器上没有任何可读的 Chromium 配置时，面板直说「未找到 Chrome/Edge 登录态（可选）」
+  并且**不再给出「连接官方」按钮**（避免让用户白跑一趟网页）。
+- `package.json` 的 description / keywords、中英文 README 首屏、`docs/listing.md` 上架文案一并重写：
+  把「兼容 DSH 0.2.x / 零外部依赖 / 账号登录也能看余额 / 峰谷计价」提到最前面，
+  并附一张与 dsh-token-usage、dsh-token-meter、dsh-usage 的实测对比表（2026-10-10，DSH 0.2.0-rc.2）。
+
 ## 0.6.4 — 面板细节打磨（措辞/配色/交互）
 
 ### 界面

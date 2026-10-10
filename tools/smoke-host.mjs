@@ -80,7 +80,7 @@ const ctx = {
   effect(cb, label) { effects.push({ label, dispose: cb() }); return { dispose() {} }; },
 };
 
-mod.apply(ctx, {});
+await mod.apply(ctx, {});
 // 设置 namespace 的注册要等 schemastery 动态导入完成，让出一个 tick 再看结果
 await new Promise((resolve) => setTimeout(resolve, 50));
 console.log('\n--- registered routes ---');
@@ -123,6 +123,23 @@ if (sum) {
 // 回归点：早先只实现了 API Key 路径，账号登录的用户永远只看到「未配置凭据」。
 const bal = routes.find((r) => r.path.endsWith('/balance'));
 let smokeFailures = 0;
+
+// ---- 会话根解析：优先用官方库 @deepseek-ai/dsh-home-paths（与整个 harness 同一套规则），
+//      解析不到时退回等价实现（$DSH_HOME 优先、空白环境变量视为未设置） ----
+{
+  let officialLib = false;
+  try { await import('@deepseek-ai/dsh-home-paths'); officialLib = true; } catch { /* 回退实现 */ }
+  const root = await mod.resolveSessionsRoot({});
+  const absolute = typeof root === 'string' && (root.startsWith('/') || /^[A-Za-z]:[\\/]/.test(root));
+  const rootOk = absolute && /sessions[\\/]?$/.test(root);
+  const explicit = await mod.resolveSessionsRoot({ sessionsRoot: '/tmp/explicit-sessions' });
+  console.log('\n-- 会话根解析 --');
+  console.log(`  ${rootOk ? 'PASS' : 'FAIL'} ${root}（官方 home-paths 库${officialLib ? '可用 → 已使用' : '不可用 → 回退实现'}）`);
+  console.log(`  ${explicit === '/tmp/explicit-sessions' ? 'PASS' : 'FAIL'} 组合配置显式指定优先：${explicit}`);
+  if (!rootOk) smokeFailures += 1;
+  if (explicit !== '/tmp/explicit-sessions') smokeFailures += 1;
+}
+
 if (bal) {
   const call = async (url) => {
     let body = '', status = 0;
@@ -167,7 +184,7 @@ if (bal) {
     inject(names, cb) { const s = Object.create(this); s.effect = (fn) => { fn(); return { dispose() {} }; }; cb(s); return { dispose() {} }; },
     effect(cb) { cb(); return { dispose() {} }; },
   };
-  mod.apply(ctx2, {});
+  await mod.apply(ctx2, {});
   await new Promise((resolve) => setTimeout(resolve, 30));
   const bal2 = routes2.find((r) => r.path.endsWith('/balance'));
   let body2 = '';
@@ -228,7 +245,7 @@ async function callRoute(ctxRoutes, path, url, method = 'GET') {
   };
   try {
     const { ctx: ctx3, routes: r3 } = newCtx({ credentials: { resolve: async () => ({ value: 'sk-test-key' }) } });
-    mod.apply(ctx3, {});
+    await mod.apply(ctx3, {});
     await new Promise((resolve) => setTimeout(resolve, 30));
     const got = await callRoute(r3, '/balance', '/token-meter-panel/balance?refresh=1&locale=en-US');
     const apiOk = got.payload?.ok === true
@@ -264,7 +281,7 @@ async function callRoute(ctxRoutes, path, url, method = 'GET') {
   const checkLayout = async (label, execPath, expectFragment) => {
     Object.defineProperty(process, 'execPath', { value: execPath, configurable: true });
     const { ctx, routes: r } = newCtx();
-    mod.apply(ctx, {});
+    await mod.apply(ctx, {});
     await new Promise((resolve) => setTimeout(resolve, 30));
     const got = await callRoute(r, '/health', '/token-meter-panel/health');
     const ch = got.payload?.updateChannel;

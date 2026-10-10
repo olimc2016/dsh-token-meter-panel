@@ -143,6 +143,39 @@ try {
     check('unpricedCalls', data.unpricedCalls, 1);
     check('cny', bucket(data).cny, 0);
   }
+  console.log('-- 8) 增量缓存：文件没变就走复用，变了只重算那一个，费率变了全部失效');
+  {
+    const a = record('deepseek-official', 'deepseek-flash');
+    // 两个会话：东一个 2 条记录，另一个 3 条 → 首次共 5 次调用
+    const { root } = fixture('--ws-h--', 's-cache', [['session.v4.jsonl.zstd', [a, a]]]);
+    const dir2 = join(root, '--ws-h2--', 's-cache2');
+    mkdirSync(dir2, { recursive: true });
+    writeLog(join(dir2, 'session.v4.jsonl.zstd'), [a, a, a]);
+
+    const cache = new Map();
+    const first = aggregate(root, { cache });
+    check('首次扫描全部真读（filesReused=0）', first.filesReused, 0);
+    check('首次 calls', first.calls, 5);
+
+    const second = aggregate(root, { cache });
+    check('文件未变 → 全部复用', second.filesReused, second.filesScanned);
+    check('复用后 calls 一致', second.calls, first.calls);
+    check('复用后 cny 一致', bucket(second).cny, bucket(first).cny);
+    check('复用后 sessions 数一致', Object.keys(second.sessions).length, Object.keys(first.sessions).length);
+    check('复用后 byHour 一致', JSON.stringify(Object.values(second.days).map((d) => d.byHour)), JSON.stringify(Object.values(first.days).map((d) => d.byHour)));
+
+    // 只动一个文件：只有它需要重算
+    writeLog(join(dir2, 'session.v4.jsonl.zstd'), [a, a, a, a]);
+    const third = aggregate(root, { cache });
+    check('只重算变动的那个文件', third.filesReused, third.filesScanned - 1);
+    check('变动后的 calls', third.calls, 6);
+
+    // 计价口径变了：缓存必须整体失效（否则改了设置不生效）
+    const rates = { 'deepseek-flash': { label: 'x', cacheHit: { offPeak: 0.04, peak: 0.08 }, cacheMiss: { offPeak: 2, peak: 4 }, output: { offPeak: 8, peak: 16 } } };
+    const fourth = aggregate(root, { cache, rates });
+    check('费率变化 → 不复用任何缓存', fourth.filesReused, 0);
+    check('费率翻倍后 cny 翻倍', Number(bucket(fourth).cny.toFixed(4)), Number((bucket(third).cny * 2).toFixed(4)));
+  }
 } finally {
   for (const root of roots) rmSync(root, { recursive: true, force: true });
 }
