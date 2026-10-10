@@ -1,12 +1,10 @@
 /**
  * 宿主半侧烟测：不启动 DSH，直接 import 插件模块，用一个假的 ctx 调用 apply()，
  * 检查：路由是否注册、schema 是否成立、聚合是否能出数、设置读写是否生效。
- * 需要能解析 @deepseek-ai/schemastery —— 见 tools/run-smoke.ps1 的 NODE_PATH。
+ * 需要能解析 @deepseek-ai/schemastery —— 本机解析不到时会退化成「无 schema」，仍可跑完。
  */
-import { pathToFileURL } from 'node:url';
-
-const target = pathToFileURL('F:/DSH/tools/token-meter-plugin/lib/index.js').href;
-
+// 用相对本文件的路径，别写死任何人的机器路径；URL 本身就是合法的 import specifier
+const target = new URL('../lib/index.js', import.meta.url).href;
 let mod;
 try {
   mod = await import(target);

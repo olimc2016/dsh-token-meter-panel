@@ -79,8 +79,8 @@
     "scripts":  {
                     "build":  "node tools/build-client.mjs",
                     "watch":  "node tools/build-client.mjs --watch",
-                    "setup":  "powershell -ExecutionPolicy Bypass -File tools/setup-modules.ps1",
-                    "test":  "node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
+                    "setup":  "node tools/setup-modules.mjs",
+                    "test":  "node tools/verify-generations.mjs \u0026\u0026 node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
                     "prepublishOnly":  "npm run build \u0026\u0026 npm test"
                 },
     "publishConfig":  {

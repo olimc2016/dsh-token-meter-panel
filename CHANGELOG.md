@@ -1,5 +1,34 @@
 # 变更记录
 
+## 未发布
+
+### 修复
+
+- **桌面端账号登录的用户面板恒为 0**：计费 provider 原来只认 `deepseek-official`（API Key 路由），
+  而桌面端账号登录走的是 `deepseek-account`，本地日志里这些调用被整体过滤掉。
+  现在官方计费口径是这两个路由的集合（`OFFICIAL_PROVIDERS`），本机实测立刻出数。
+- **会话日志代际只特判 v3，导致升级后漏算或翻倍**：DSH 持久化会把迁移出的旧代际文件
+  逐字节保留在磁盘上，运行时只用最高代际。原实现「存在 v3 就丢弃其他」会让
+  `v3 + v4` 永远读过期快照（新增用量看不到），而 `v1 + v4`、裸 `session.jsonl + v4`
+  又会把同一批用量算两遍（金额翻倍）。现在按 `workspace/sessionId` 只取版本号最高的那一份。
+- **后台自动更新在 macOS 桌面端必然失败**：桌面端进程 PATH 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，
+  用户 shell 里的 `dsh` 不在其中。现在优先用桌面端自带 CLI 入口
+  （`app.asar/.../dsh-desktop-host/lib/cli.js` + `ELECTRON_RUN_AS_NODE`），找不到才回退 PATH 上的 `dsh`。
+- **更新提示里写死 `--profile desktop`**：改为使用当前 profile。
+- `officialOnly` 设置项的说明补全（关掉后会计入第三方 token，但只有官方路由折算金额）。
+
+### 工程
+
+- **自检脚本不再写死作者机器路径**（`C:/Users/oli20/...`、`F:/DSH/...`），新增
+  [tools/paths.mjs](tools/paths.mjs) 统一解析 `DSH_SESSIONS` → `DSH_HOME/sessions` → `~/.dsh/sessions`；
+  没有会话日志时自动跳过而不是崩掉。
+- 新增跨平台 [tools/setup-modules.mjs](tools/setup-modules.mjs)（Windows junction / POSIX 符号链接），
+  `npm run setup` 不再依赖 PowerShell。
+- 新增回归测试 [tools/verify-generations.mjs](tools/verify-generations.mjs)：自造多帧 zstd 会话日志，
+  覆盖六个代际组合与 provider 口径（旧代码下这 9 项会失败）。
+- 新增 CI [.github/workflows/test.yml](.github/workflows/test.yml)：ubuntu + windows 各跑一遍 `npm test`。
+- 去掉 `sliceDays` 里一行无用代码。
+
 ## 0.6.4 — 面板细节打磨（措辞/配色/交互）
 
 ### 界面

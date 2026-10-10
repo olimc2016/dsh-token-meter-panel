@@ -45,8 +45,17 @@ export const PRICE_TIERS = {
     output: { offPeak: 4, peak: 8 },
   },
 };
-export const BILLING_PROVIDER = 'deepseek-official';
-const FALLBACK_RATE = 'deepseek-flash';
+/**
+ * 计费口径：只有 DeepSeek 官方路由的调用才折算 CNY，其他 provider（第三方中转、
+ * 自建端点等）只记 token、不给金额。
+ *   - deepseek-official：API Key 路由（@deepseek-ai/dsh-llm-deepseek-api-key 注册）
+ *   - deepseek-account ：桌面端 DeepSeek 账号登录路由（@deepseek-ai/dsh-llm-deepseek-account）
+ * 两个 id 必须与基座实际注册的 provider 名一致：只写死 official 时，用桌面端
+ * 账号登录的会话（本地日志里 source.provider === 'deepseek-account'）一条都统计不到。
+ */
+export const OFFICIAL_PROVIDERS = ['deepseek-official', 'deepseek-account'];
+/** @deprecated 改用 OFFICIAL_PROVIDERS；仅保留旧名，避免破坏外部导入。 */
+export const BILLING_PROVIDER = OFFICIAL_PROVIDERS[0];
 
 /* ------------------------------------------------------------------ *
  * 时间：一律按北京时间（UTC+8）分桶，与机器时区解耦
@@ -174,13 +183,31 @@ function packBucket(b) {
 }
 
 /**
+ * 会话日志文件名 → 格式代际。
+ * 官方持久化布局（@deepseek-ai/dsh-session-persistence-jsonl）：
+ *   `session.jsonl[.zstd]`（v0）、`session.vN.jsonl[.zstd]`
+ * 运行时永远只读写「数值最高的 generation」，而迁移出的旧代际文件按设计
+ * **逐字节保留在磁盘上**（"源保持逐字节不变"）。因此同一会话目录里出现
+ * v3 + v4、v1 + v4、裸 session.jsonl + v4 都是正常状态，扫描时必须只取最高一代：
+ *   - 全都收 → 同一批用量被算两次，金额翻倍
+ *   - 写死只认某一代（早先是 v3）→ 升级到 v4 之后新增用量永远看不到
+ * @param {string} name 文件名
+ * @returns {{gen:number, compressed:boolean}|null} 非会话日志返回 null
+ */
+function generationOf(name) {
+  const m = /^session(?:\.v(\d+))?\.jsonl(\.zstd)?$/.exec(name);
+  if (!m) return null;
+  return { gen: m[1] ? Number(m[1]) : 0, compressed: Boolean(m[2]) };
+}
+
+/**
  * 扫描会话根目录并聚合。
- * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.v3].jsonl.zstd
+ * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.vN].jsonl[.zstd]
  * （兼容工作区目录下直接放文件的形态）
  * @param {string} sessionsRoot 会话根目录
- * @param {{rates?:object, includeOtherProviders?:boolean, limit?:number}} [options]
+ * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number}} [options]
  */
-export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, limit = Infinity, budgetMs = 0 } = {}) {
+export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0 } = {}) {
   const files = [];
   const listEntries = (p) => {
     try {
@@ -189,7 +216,6 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
       return [];
     }
   };
-  const isLog = (n) => n.endsWith('.jsonl') || n.endsWith('.jsonl.zstd');
   if (existsSync(sessionsRoot)) {
     for (const ws of listEntries(sessionsRoot)) {
       if (!ws.dir) continue;
@@ -199,26 +225,35 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
         const sessionId = lvl2.dir ? lvl2.name : lvl2.name.split('__')[0];
         const candidates = lvl2.dir ? listEntries(lvl2.path) : [lvl2];
         for (const c of candidates) {
-          if (c.dir || !isLog(c.name)) continue;
+          if (c.dir) continue;
+          const generation = generationOf(c.name);
+          if (!generation) continue; // session.lock、导出文件等一律不是会话日志
           let st;
           try { st = statSync(c.path); } catch { continue; }
           files.push({
             workspace: ws.name, sessionId, name: c.name, file: c.path,
-            mtimeMs: st.mtimeMs, size: st.size,
+            mtimeMs: st.mtimeMs, size: st.size, ...generation,
           });
         }
       }
     }
   }
-  // 同一会话 v3 与旧版并存时只认 v3，否则用量翻倍
-  const v3Ids = new Set(
-    files.filter((f) => f.name.includes('session.v3.jsonl')).map((f) => `${f.workspace}/${f.sessionId}`),
-  );
-  const all = files.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const kept = all
-    .filter((f) => f.name.includes('session.v3.jsonl') || !v3Ids.has(`${f.workspace}/${f.sessionId}`))
-    .slice(0, limit === Infinity ? undefined : limit);
-  const skipped = all.filter((f) => !kept.includes(f));
+  // 每个会话只保留最高代际；同代际（正常不会出现）先取压缩版，再取更新的那个。
+  const newest = new Map();
+  for (const f of files) {
+    const key = `${f.workspace}/${f.sessionId}`;
+    const prev = newest.get(key);
+    if (!prev) { newest.set(key, f); continue; }
+    const better = f.gen !== prev.gen
+      ? f.gen > prev.gen
+      : f.compressed !== prev.compressed
+        ? f.compressed
+        : f.mtimeMs > prev.mtimeMs;
+    if (better) newest.set(key, f);
+  }
+  const all = [...newest.values()].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const kept = all.slice(0, limit === Infinity ? undefined : limit);
+  const skipped = all.slice(kept.length);
 
   const days = new Map();
   const sessions = new Map();
@@ -273,7 +308,7 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
       if (!got) continue;
       const provider = got.source?.provider ?? 'unknown';
       const model = got.source?.model ?? 'unknown';
-      const billed = provider === BILLING_PROVIDER;
+      const billed = billingProviders.includes(provider);
       if (!billed && !includeOtherProviders) continue;
 
       calls += 1;
@@ -332,7 +367,6 @@ export const todayKey = (now = Date.now()) => dayKeyOf(now);
 
 /** 把聚合结果裁剪到只看最近 N 天（含今天），用于 7/30 天视图 */
 export function sliceDays(summary, days, now = Date.now()) {
-  const end = new Date(Date.now() ? now : now);
   const keys = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now - i * 86400000);

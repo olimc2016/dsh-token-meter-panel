@@ -243,11 +243,15 @@ DSH 的 `.jsonl.zstd` 是**追加写入的多帧 zstd**：
 ## 开发
 
 ```bash
-npm run setup    # 建本地模块解析入口（junction，见下）
-npm test         # 采集自检 + 宿主烟测 + 客户端烟测
+npm run setup    # 建本地模块解析入口（Windows 用 junction，macOS/Linux 用符号链接）
+npm test         # 代际/provider 回归 + 采集自检 + 宿主烟测 + 客户端烟测
 npm run build    # 重建 lib/client.js（改 src/client/index.js 后必须执行）
 npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 ```
+
+> `npm test` 在**任何平台、任何机器**上都能跑：需要会话日志的自检找不到日志时自动跳过，
+> 不依赖任何人的本机路径。CI（[`.github/workflows/test.yml`](.github/workflows/test.yml)）
+> 会在 ubuntu 与 windows 两套 runner 上各跑一遍，防止再出现「只在我这台机器上成立」的假设。
 
 目录结构：
 
@@ -265,9 +269,10 @@ npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 └── tools/                # 构建与自检脚本
 ```
 
-> **`npm run setup` 为什么需要**：Node 解析 junction/symlink 时使用**真实路径**，
+> **`npm run setup` 为什么需要**：Node 解析 symlink/junction 时使用**真实路径**，
 > 插件目录内的 `import '@deepseek-ai/schemastery'` 不会去 profile 的 `node_modules` 找。
-> 该脚本在插件目录内建 junction 指向基座包。缺失时插件会优雅降级：不注册设置项，其余功能照常。
+> 该脚本（[tools/setup-modules.mjs](tools/setup-modules.mjs)，跨平台；旧的 `.ps1` 仍保留给 Windows 用）
+> 在插件目录内建链接指向基座包。缺失时插件会优雅降级：不注册设置项，其余功能照常。
 > **运行时不需要这一步**：宿主的 Node 服务进程以应用目录为解析起点，能正常命中基座包。
 
 改宿主代码（`lib/index.js`、`src/core.mjs`）需要重启 DSH 才生效；
