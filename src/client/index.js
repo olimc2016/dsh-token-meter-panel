@@ -1496,7 +1496,6 @@ function TokenMeterPanel(props) {
     }, [
       React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件${data.filesReused > 0 ? `（复用 ${data.filesReused}）` : ''} · 扫描 ${data.elapsedMs}ms${data.filesOutsideWindow > 0 ? ` · 窗口外 ${data.filesOutsideWindow}` : ''}`),
       React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}${data.partialScan ? ` · ${t('scanning')}` : ''}`),
-      React.createElement('div', { key: 'c' }, `${t('rateLine')}：${data.pricing?.source} （采集于 ${data.pricing?.fetchedAt}）`),
       /* 版本号 + 开源协议 + 更新提示 */
       React.createElement('div', {
         key: 'ver',
