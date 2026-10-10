@@ -27,6 +27,14 @@ const WIDTH = Number(argOf('--width', 1000));
 
 /** 取真实数据：用假 ctx 跑一遍宿主半侧的 /summary 与 /balance */
 async function collectData() {
+  // 累计消费走 get_user_summary —— 预览里别打真网络，给一个与本机余额同量级的假值
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/v0/users/get_user_summary')) {
+      return { ok: true, status: 200, json: async () => ({ data: { biz_data: { total_costs: [{ currency: 'CNY', amount: '38.6617931000000000' }] } } }) };
+    }
+    throw new Error(`preview: unexpected fetch ${url}`);
+  };
   const mod = await import(new URL('../lib/index.js', import.meta.url).href);
   const routes = [];
   const fakeSettings = {
@@ -49,6 +57,9 @@ async function collectData() {
       async getBalance() {
         return { status: 'ready', value: [{ currency: 'CNY', balance: '91.2898273800000000' }], bonusWallets: [{ currency: 'CNY', balance: '2.0588434400000000' }] };
       },
+      async getPlatformSession() {
+        return { origin: 'https://platform.deepseek.com', token: 'preview-session', requestHeaders: {} };
+      },
     },
     webServer: { register: (spec) => { routes.push(spec); return () => {}; } },
     get(name) { return name === 'deepseekAccount' ? ctx.deepseekAccount : undefined; },
@@ -66,6 +77,7 @@ async function collectData() {
   };
   const summary = await call('/summary', '/token-meter-panel/summary?refresh=1');
   const balance = await call('/balance', '/token-meter-panel/balance?refresh=1&locale=zh-CN');
+  globalThis.fetch = realFetch;
   return { summary, balance };
 }
 

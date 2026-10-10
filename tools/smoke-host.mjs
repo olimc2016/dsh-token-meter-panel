@@ -55,6 +55,14 @@ const ctx = {
         bonusWallets: [{ currency: 'CNY', balance: '1.66' }],
       };
     },
+    // 累计消费：宿主用同一把账号会话自己去取 /api/v0/users/get_user_summary
+    async getPlatformSession() {
+      return {
+        origin: 'https://platform.deepseek.com',
+        token: 'acct-session-token',
+        requestHeaders: { 'x-client-platform': 'desktop-mac', 'x-client-version': '0.2.0-rc.2' },
+      };
+    },
   },
   webServer: {
     register(spec) {
@@ -148,7 +156,19 @@ if (bal) {
     return { status, payload: JSON.parse(body)?.data };
   };
 
+  // 打桩：宿主取累计消费会请求 get_user_summary，别让烟测打真网络
+  const realFetchForAccount = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const target = String(url);
+    if (!target.includes('/api/v0/users/get_user_summary')) throw new Error(`unexpected fetch: ${target}`);
+    if (init?.headers?.['x-dsh-auth-token'] !== 'acct-session-token') throw new Error('累计消费没有带账号会话 token');
+    return {
+      ok: true, status: 200,
+      json: async () => ({ data: { biz_data: { total_costs: [{ currency: 'CNY', amount: '38.6617931000000000' }] } } }),
+    };
+  };
   const account = await call('/token-meter-panel/balance?locale=zh-CN&refresh=1');
+  globalThis.fetch = realFetchForAccount;
   const info = account.payload?.balance_infos?.[0];
   const accountOk = account.payload?.ok === true
     && account.payload?.source === 'account'
@@ -156,12 +176,17 @@ if (bal) {
     && info?.topped_up_balance === '12.34'
     && info?.granted_balance === '1.66'
     && info?.total_balance === '14.00'; // 12.34 + 1.66：十进制字符串相加不能写成 13.999999999
+  const costOk = account.payload?.total_costs?.length === 1
+    && account.payload.total_costs[0].currency === 'CNY'
+    && account.payload.total_costs[0].amount === '38.6617931000000000';
   const clientOk = settingStore.balanceClient?.timezoneOffsetSeconds !== undefined
     && typeof settingStore.balanceClient?.version === 'string';
   console.log(`\nGET /token-meter-panel/balance (账号路径) -> ${account.status} ${JSON.stringify(account.payload)}`);
   console.log(`  ${accountOk ? 'PASS' : 'FAIL'} 账号余额映射（total=${info?.total_balance} 充值=${info?.topped_up_balance} 赠送=${info?.granted_balance}）`);
   console.log(`  ${clientOk ? 'PASS' : 'FAIL'} 传了官方平台要求的调用方元数据（version/locale/timezoneOffsetSeconds）`);
+  console.log(`  ${costOk ? 'PASS' : 'FAIL'} 官方累计消费（total_costs=${JSON.stringify(account.payload?.total_costs)}）`);
   if (!accountOk) smokeFailures += 1;
+  if (!costOk) smokeFailures += 1;
   if (!clientOk) smokeFailures += 1;
 
   // 回退路径：没有账号服务、也没有凭据时，应明确说明而不是抛错

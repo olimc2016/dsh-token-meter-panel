@@ -55,6 +55,8 @@ const zh = {
   'historyTitle': '历史（按天）',
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
+  'totalSpent': '累计消费',
+  'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
   'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
   'officialLoading': '正在获取官方数据…',
@@ -158,6 +160,8 @@ const en = {
   'historyTitle': 'History (daily)',
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
+  'totalSpent': 'Total spent',
+  'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
   'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
   'noBrowser': 'no Chrome/Edge detected (optional)',
   'officialLoading': 'fetching official data…',
@@ -627,6 +631,14 @@ function TokenMeterPanel(props) {
   const balInfo = balData?.ok ? balData.balance_infos?.[0] : null;
   const balCur = balInfo?.currency === 'USD' ? '$' : '¥';
   const balGranted = balInfo && Number(balInfo.granted_balance) > 0 ? String(balInfo.granted_balance) : null;
+  // 官方账号的累计消费（/api/v0/users/get_user_summary 的 total_costs）；API Key 路径没有这项
+  const balCostRow = (() => {
+    const rows = balData?.total_costs;
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return rows.find((row) => row?.currency === balInfo?.currency) ?? rows[0];
+  })();
+  const balCost = balCostRow && Number(balCostRow.amount) > 0 ? balCostRow.amount : null;
+  const balCostCur = balCostRow?.currency === 'USD' ? '$' : '¥';
   const balSource = balData?.source === 'account' ? t('balanceAccount')
     : balData?.source === 'apikey' ? t('balanceApiKey') : '';
   const balText = !data.config?.showBalance
@@ -853,6 +865,23 @@ function TokenMeterPanel(props) {
           React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
           ]),
         ]),
+        balCost
+          ? React.createElement('div', {
+            key: 'tc',
+            onClick: () => { balance.reload(); refresh(); },
+            title: `${t('totalSpent')} · ${balSource} · ${t('totalSpentHint')}`,
+            style: {
+              flex: '1 1 100%', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 8,
+              cursor: 'pointer', userSelect: 'none',
+            },
+          }, [
+            React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, t('totalSpent')),
+            React.createElement('span', {
+              key: 'v',
+              style: { marginLeft: 'auto', fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums', color: C.label2 },
+            }, `${balCostCur}${fmtMoney(balCost)}`),
+          ])
+          : null,
         React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
             const off = data.official;

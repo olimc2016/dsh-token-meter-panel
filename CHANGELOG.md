@@ -85,6 +85,15 @@
   客户端 bundle id / slot id 全都不同」，再在孪生包目录内跑一遍它自己的 smoke-host、
   smoke-client、聚合回归 —— 已挂进 `npm test`（CI 的 ubuntu + windows 都会跑）。
 
+### 官方累计消费（无需任何登录）
+
+- 面板第一栏余额下方新增一行**累计消费**：数据来自 `GET /api/v0/users/get_user_summary` 的
+  `total_costs`，用**账号授权**的那把会话 token 直接查（`getPlatformSession()`），
+  与 DSH 自己查余额同一条通路 —— **不需要浏览器登录**，也不依赖官方用量接口。
+  官方 SDK 的 `getBalance()` 只投影了钱包（`normal_wallets` / `bonus_wallets`），
+  所以这一项由宿主自己取；失败/无授权时静默省略，绝不影响余额显示。
+- 范围说明：这是**账号开通以来的累计**，不是按天用量；按天 30 天仍然需要网页登录态。
+
 ### 官方用量：支持 DSH 内置浏览器
 
 - **读取器新增 DSH 桌面版自己的存储**：以前只扫 Chrome/Edge/Brave/Vivaldi 的 User Data，
