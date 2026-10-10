@@ -68,8 +68,8 @@ const zh = {
   'perCallHint': '今日消费 ÷ 调用次数，单位：元/次',
   'composeTitle': '总 token 构成',
   'colItem': '项目',
-  'colPrice': '单价 当前/高峰',
-  'colUsage': '今日用量',
+  'colPrice': '单价 现/峰',
+  'colUsage': '用量',
   'colSubtotal': '小计',
   'todayTotal': '今日合计',
   'rateFootnote': '单价：元/百万 token。空闲档 flash ¥0.02/¥1/¥4、v4-pro ¥0.15/¥4.5/¥13.5，高峰为其两倍。口径：API 官方价目表。',
@@ -190,8 +190,8 @@ const en = {
   'perCallHint': "today's cost ÷ calls (CNY per call)",
   'composeTitle': 'Token mix',
   'colItem': 'Item',
-  'colPrice': 'Unit price now/peak',
-  'colUsage': 'Usage today',
+  'colPrice': 'Price',
+  'colUsage': 'Usage',
   'colSubtotal': 'Subtotal',
   'todayTotal': 'Today total',
   'rateFootnote': 'Unit price: CNY per million tokens. Off-peak flash ¥0.02/¥1/¥4, v4-pro ¥0.15/¥4.5/¥13.5; peak is double. Source: official API price list.',
@@ -1081,7 +1081,6 @@ function TokenMeterPanel(props) {
           key: '2', t, surface: S.stat, label: t('hitRate'),
           value: D.hitRate === null || D.hitRate === undefined ? '—' : `${D.hitRate}`,
           unit: '%',
-          extra: ` · ${D.calls} ${t('calls')}`,
         }),
         React.createElement(Stat, { key: '3', t, surface: S.stat, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
         React.createElement(Stat, { key: '4', t, surface: S.stat, label: t('output'), color: C.out, value: fmt(D.out) }),
@@ -1131,59 +1130,6 @@ function TokenMeterPanel(props) {
             ]),
           ];
         })()),
-        /* 金额公式：峰/谷分开算，再汇总（合计以官方金额为准） */
-        React.createElement('div', {
-          key: 'formula',
-          style: {
-            gridColumn: '1 / -1', fontSize: 11.5, color: C.label3, lineHeight: 1.8,
-            borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2,
-          },
-        }, (() => {
-          const tier = D.tier;
-          // 费率字段名是 cacheHit / cacheMiss / output（不是 hit/miss/out）
-          const unitOf = (rateSet) => ({
-            hit: rateSet?.cacheHit ?? unit.hit,
-            miss: rateSet?.cacheMiss ?? unit.miss,
-            out: rateSet?.output ?? unit.out,
-          });
-          const row = (label, tk, prices, cny) => React.createElement('div', {
-            key: label,
-            style: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-          }, [
-            React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, label),
-            React.createElement('span', { key: 'm', style: { color: C.label, fontWeight: 650 } }, money(cny)),
-            React.createElement('span', { key: 'eq' }, '='),
-            React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(tk?.hit ?? 0)} × ¥${prices.hit}`),
-            React.createElement('span', { key: 'p1' }, '+'),
-            React.createElement('span', { key: 'm2' }, `${t('missInput')} ${fmtM(tk?.miss ?? 0)} × ¥${prices.miss}`),
-            React.createElement('span', { key: 'p2' }, '+'),
-            React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(tk?.out ?? 0)} × ¥${prices.out}`),
-          ]);
-          if (!tier || ((tier.peak?.calls ?? 0) === 0 && (tier.offPeak?.calls ?? 0) === 0)) {
-            // 没有分档数据（例如当天没有本地日志）时退回单行展示，并标明按当前时段单价
-            return [
-              React.createElement('div', { key: 'one', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
-                React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
-                React.createElement('span', { key: 'eq' }, '='),
-                React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(D.hit)} × ¥${unit.hit}`),
-                React.createElement('span', { key: 'p1' }, '+'),
-                React.createElement('span', { key: 'p2' }, `${t('missInput')} ${fmtM(D.miss)} × ¥${unit.miss}`),
-                React.createElement('span', { key: 'p3' }, '+'),
-                React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(D.out)} × ¥${unit.out}`),
-                React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('byCurrentTier')}）`),
-              ]),
-            ];
-          }
-          return [
-            row(t('peak'), tier.peak, unitOf(cfgRates?.peak?.['deepseek-flash']), tier.peak?.cny ?? 0),
-            row(t('offpeak'), tier.offPeak, unitOf(cfgRates?.offPeak?.['deepseek-flash']), tier.offPeak?.cny ?? 0),
-            React.createElement('div', { key: 'sum', style: { display: 'flex', gap: 6, marginTop: 2 } }, [
-              React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, t('sumLabel')),
-              React.createElement('span', { key: 'v', style: { color: C.label, fontWeight: 700 } }, money(D.cny)),
-              React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('fromOfficial')}；${t('tierFromLocal')}）`),
-            ]),
-          ];
-        })()),
       ]),
       /* 第三栏：峰谷时段与峰谷价 */
       React.createElement('div', {
@@ -1208,7 +1154,7 @@ function TokenMeterPanel(props) {
           const th = (key, text, align) => React.createElement('th', {
             key, style: { textAlign: align, fontSize: 10.5, fontWeight: 600, color: C.label3, padding: '2px 4px' },
           }, text);
-          const num = { textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+          const num = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
           const line = { borderTop: `1px solid ${C.border1}` };
           const sumRow = (key, label, value, strong) => React.createElement('tr', { key }, [
             td('l', label, { ...line, padding: '3px 4px', textAlign: 'right', color: strong ? C.label2 : C.label3, colSpan: 3, fontWeight: strong ? 700 : 400 }),
@@ -1216,7 +1162,7 @@ function TokenMeterPanel(props) {
           ]);
           return React.createElement('table', {
             key: 'merge',
-            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11.5, marginTop: 9 },
+            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 9, tableLayout: 'fixed' },
           }, [
             React.createElement('thead', { key: 'th' }, React.createElement('tr', null, [
               th('i', t('colItem'), 'left'), th('p', t('colPrice'), 'right'), th('u', t('colUsage'), 'right'), th('s', t('colSubtotal'), 'right'),
@@ -1231,8 +1177,8 @@ function TokenMeterPanel(props) {
                 td('u', fmtM(r.tokens), { ...line, ...num, padding: '3px 4px' }),
                 td('s', money((r.tokens / 1e6) * (r.now ?? 0)), { ...line, ...num, padding: '3px 4px', fontWeight: 650 }),
               ])),
-              D.tier ? sumRow('off', `${t('offpeak')}${t('sumLabel')}`, money(D.tier.offPeak?.cny ?? 0)) : null,
-              D.tier ? sumRow('pk', `${t('peak')}${t('sumLabel')}`, money(D.tier.peak?.cny ?? 0)) : null,
+              D.tier ? sumRow('off', t('offpeak'), money(D.tier.offPeak?.cny ?? 0)) : null,
+              D.tier ? sumRow('pk', t('peak'), money(D.tier.peak?.cny ?? 0)) : null,
               sumRow('all', t('todayTotal'), money(D.cny), true),
             ].filter(Boolean)),
           ]);
@@ -1385,7 +1331,7 @@ function TokenMeterPanel(props) {
               fontWeight: isToday ? 700 : 400,
               maxWidth: trend_.length <= 4 ? 78 : 'none',
             },
-          }, isToday ? t('today') : key.slice(5));
+          }, isToday ? t('today') : (index % 3 === 0 ? key.slice(5) : ''));
         })),
 
       /* 分时 */
