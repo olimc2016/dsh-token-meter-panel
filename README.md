@@ -79,6 +79,18 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 
 ## 安装
 
+> ### 两个包名，同一个插件
+>
+> 本插件以两个名字发布，**代码完全相同**，装哪个都行：
+>
+> | 包名 | 说明 |
+> |---|---|
+> | [`dsh-token-meter-panel`](https://www.npmjs.com/package/dsh-token-meter-panel) | 主力包（本仓库名） |
+> | [`dsh-token-mb`](https://www.npmjs.com/package/dsh-token-mb) | 短名孪生包，由 `npm run twin` 从同一份源码生成 |
+>
+> 两个包的插槽行 id、webServer 路由前缀、设置命名空间、浏览器侧 slot id 全部独立，
+> 所以**同时装两个也不会冲突**（会看到两个「Token」面板）。日常只需装一个。
+
 ### 方式零：一键脚本（推荐）
 
 **Windows**（自动找到 DSH 自带的 `dsh` 与 `pnpm`，装完提示重启）：

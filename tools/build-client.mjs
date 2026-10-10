@@ -43,6 +43,9 @@ const options = {
   external,
   sourcemap: true,
   legalComments: 'none',
+  // 包名注入到浏览器半侧：同一个仓库两个包名（dsh-token-meter-panel / dsh-token-mb）共用同一份
+  // 源码，靠这个常量派生出各自的 slot id / 路由前缀 / locale 命名空间，避免同时装时重复注册。
+  define: { __DSH_PLUGIN_NAME__: JSON.stringify(pkg.name) },
   banner: {
     js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(pkg.name)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;`,
   },

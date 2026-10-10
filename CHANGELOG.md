@@ -61,6 +61,20 @@
   （`OFFICIAL_DAYS`），本地历史表的上限也从 14 天对齐到 30 天。
   页脚相应标出「复用 N 个文件」「窗口外 N」「正在补扫历史…」。
 
+### 双名发布（`dsh-token-mb`）
+
+- 新增 [tools/make-twin.mjs](tools/make-twin.mjs)：从同一份源码生成孪生包 `dist/dsh-token-mb/`
+  （`npm run twin`，发布 `npm run publish:twin`）。两个包**代码完全相同**，只有包名与各类标识不同。
+- 为了让两个包**同时装也不冲突**，所有会撞车的标识都改成由包名派生：
+  - 宿主：插件 `name`、webServer 路由前缀、settings 命名空间、升级 spec（主力包走 GitHub tag，
+    孪生包走 npm spec）——`lib/index.js` 里从 `package.json` 的 name 派生；
+  - 浏览器：slot id、路由前缀、locale 命名空间 —— 由 `tools/build-client.mjs` 在构建期通过 esbuild
+    `define` 注入包名后派生（主力包沿用历史 slot id `tokenmeter`，不动用户已有的侧栏选择）；
+  - 插槽行 id 各自写在自己的 `cordis.patch.yml`（`token-meter-panel` / `token-meter-mb`）。
+- 新增 [tools/verify-twin.mjs](tools/verify-twin.mjs)：生成孪生包并断言「包名 / 行 id / 宿主插件 id /
+  客户端 bundle id / slot id 全都不同」，再在孪生包目录内跑一遍它自己的 smoke-host、
+  smoke-client、聚合回归 —— 已挂进 `npm test`（CI 的 ubuntu + windows 都会跑）。
+
 ### 生态
 
 - **会话根目录改走官方规则**：优先用官方库 [`@deepseek-ai/dsh-home-paths`](https://www.npmjs.com/package/@deepseek-ai/dsh-home-paths)

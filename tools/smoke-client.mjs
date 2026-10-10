@@ -9,8 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
 const bundlePath = join(here, '..', 'lib', 'client.js');
 const code = readFileSync(bundlePath, 'utf8');
+// 包名派生的期望值：同一个仓库两个包名（dsh-token-meter-panel / dsh-token-mb）共用源码，
+// 靠构建期注入的包名派生出各自的 slot id / locale 命名空间；主力包沿用历史 id `tokenmeter`。
+const shortName = pkg.name.replace(/^dsh-/, '');
+const expectedSlot = shortName === 'token-meter-panel' ? 'tokenmeter' : shortName;
 
 let captured = null;
 globalThis.window = {
@@ -74,12 +79,22 @@ for (const r of registrations) {
   else console.log(`  register name=${r.spec.name} id=${r.spec.id ?? '-'} key=${r.spec.key ?? '-'} component=${typeof r.component}`);
 }
 
-// 关键断言：侧栏入口与 main 面板的 id/key 必须同名，否则点侧栏图标选不中面板
+// 关键断言：
+//  1) 侧栏入口与 main 面板的 id/key 必须同名，否则点侧栏图标选不中面板；
+//  2) 两者都必须等于「包名派生出来的 slot id」，locale 命名空间同理 ——
+//     这条保证孪生包（另一个包名）不会和主力包注册同一个 id / 同一个命名空间。
 const panel = registrations.find((r) => r.kind === 'register' && r.spec.name === 'sidebar.panellist');
 const main = registrations.find((r) => r.kind === 'register' && r.spec.name === 'main');
-const ok = panel && main && panel.spec.id === main.spec.key;
-console.log(`\nassert id(${panel?.spec.id}) === key(${main?.spec.key}) -> ${ok ? 'PASS' : 'FAIL'}`);
-if (!ok) process.exit(1);
+const sameKey = Boolean(panel && main && panel.spec.id === main.spec.key);
+const idsOk = panel?.spec.id === expectedSlot && main?.spec.key === expectedSlot;
+const bundleIdOk = captured.id === pkg.name;
+const localeOk = locales.length === 1 && locales[0].ns === shortName;
+console.log(`\npackage         : ${pkg.name}（期望 slot id = ${expectedSlot}）`);
+console.log(`assert bundle id === package name -> ${bundleIdOk ? 'PASS' : 'FAIL'} (${captured.id})`);
+console.log(`assert id(${panel?.spec.id}) === key(${main?.spec.key}) -> ${sameKey ? 'PASS' : 'FAIL'}`);
+console.log(`assert slot id 派生正确 -> ${idsOk ? 'PASS' : 'FAIL'} (${panel?.spec.id})`);
+console.log(`assert locale 命名空间独立 -> ${localeOk ? 'PASS' : 'FAIL'} (${locales.map((l) => l.ns).join(', ')})`);
+if (!(sameKey && idsOk && bundleIdOk && localeOk)) process.exit(1);
 
 // 顺带确认面板组件能渲染出一棵元素树（用假 React）
 try {

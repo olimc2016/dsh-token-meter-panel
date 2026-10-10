@@ -91,8 +91,10 @@
                     "build":  "node tools/build-client.mjs",
                     "watch":  "node tools/build-client.mjs --watch",
                     "setup":  "node tools/setup-modules.mjs",
-                    "test":  "node tools/verify-generations.mjs \u0026\u0026 node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
-                    "prepublishOnly":  "npm run build \u0026\u0026 npm test"
+                    "test":  "node tools/verify-generations.mjs \u0026\u0026 node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs \u0026\u0026 node tools/verify-twin.mjs",
+                    "prepublishOnly":  "npm run build \u0026\u0026 npm test",
+                    "twin":  "node tools/make-twin.mjs",
+                    "publish:twin":  "npm run twin \u0026\u0026 npm publish dist/dsh-token-mb"
                 },
     "publishConfig":  {
                           "registry":  "https://registry.npmjs.org/"

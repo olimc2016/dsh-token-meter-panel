@@ -12,8 +12,18 @@ import React from 'react';
  * 样式：只用 DSH 自己的 --dsw-* 主题变量，因此在深浅色主题下都跟界面一致。
  */
 
-const SLOT_ID = 'tokenmeter';
-const ROUTE = '/token-meter-panel/summary';
+/**
+ * 包名在**构建期**注入（tools/build-client.mjs 的 define）。同一个仓库会以两个名字发布
+ * （dsh-token-meter-panel / dsh-token-mb），两个包必须用不同的侧栏 slot id 与路由前缀，
+ * 否则同时装进一个 profile 时浏览器侧的 slot / 路由会重复注册。
+ * 主力包保持历史的 slot id `tokenmeter`（不动用户已有的侧栏选择），孪生包用包名短名。
+ */
+const PKG_NAME = typeof __DSH_PLUGIN_NAME__ === 'string' ? __DSH_PLUGIN_NAME__ : 'dsh-token-meter-panel';
+const SHORT_NAME = PKG_NAME.replace(/^dsh-/, '');
+const SLOT_ID = SHORT_NAME === 'token-meter-panel' ? 'tokenmeter' : SHORT_NAME;
+const ROUTE_BASE = `/${SHORT_NAME}`;
+const LOCALE_NS = SHORT_NAME;
+const ROUTE = `${ROUTE_BASE}/summary`;
 
 /* ------------------------------------------------------------------ *
  * 文案
@@ -447,7 +457,7 @@ function useBalance(enabled) {
     setState((prev) => ({ status: prev.data ? 'ready' : 'loading', data: prev.data }));
     const locale = (typeof navigator !== 'undefined' && navigator.language) || 'zh-CN';
     // tick>0 = 用户手动刷新（宿主会跳过 60s 缓存重新取数）
-    const url = `/token-meter-panel/balance?locale=${encodeURIComponent(locale)}${tick > 0 ? '&refresh=1' : ''}`;
+    const url = `${ROUTE_BASE}/balance?locale=${encodeURIComponent(locale)}${tick > 0 ? '&refresh=1' : ''}`;
     fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then((r) => r.json())
       .then((body) => { if (alive) setState({ status: 'ready', data: body?.data ?? null }); })
@@ -1403,7 +1413,7 @@ function TokenMeterPanel(props) {
         key: 'ver',
         style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 },
       }, [
-        React.createElement('span', { key: 'n' }, `${data.plugin?.name ?? 'dsh-token-meter-panel'} v${data.plugin?.version ?? '?'}`),
+        React.createElement('span', { key: 'n' }, `${data.plugin?.name ?? PKG_NAME} v${data.plugin?.version ?? '?'}`),
         React.createElement('span', { key: 's1' }, '·'),
         React.createElement('a', {
           key: 'lic',
@@ -1457,7 +1467,7 @@ function TokenMeterPanel(props) {
 export const inject = ['slots', 'locale'];
 
 export function apply(ctx) {
-  ctx.effect(() => ctx.locale.register('token-meter-panel', { zh, en }), 'token-meter-panel: dictionaries');
+  ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), `${LOCALE_NS}: dictionaries`);
 
   // 侧栏入口（id 必须与 main 面板的 key 同名，sidebar 用 id 去选中面板）
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
@@ -1465,13 +1475,13 @@ export function apply(ctx) {
     id: SLOT_ID,
     order: 90,
     label: () => 'Token',
-    locale: 'token-meter-panel',
+    locale: LOCALE_NS,
   }, (props) => React.createElement(MeterIcon, { size: props?.size ?? 16, active: props?.active })));
 
   // 中栏独立面板
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: SLOT_ID,
-    locale: 'token-meter-panel',
+    locale: LOCALE_NS,
   }, TokenMeterPanel));
 }
