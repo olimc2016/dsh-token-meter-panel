@@ -85,6 +85,17 @@
   客户端 bundle id / slot id 全都不同」，再在孪生包目录内跑一遍它自己的 smoke-host、
   smoke-client、聚合回归 —— 已挂进 `npm test`（CI 的 ubuntu + windows 都会跑）。
 
+### 官方用量：支持 DSH 内置浏览器
+
+- **读取器新增 DSH 桌面版自己的存储**：以前只扫 Chrome/Edge/Brave/Vivaldi 的 User Data，
+  而用户在 **DSH 内置浏览器**里登录 platform.deepseek.com 时，登录态落在
+  `~/Library/Application Support/@deepseek-ai/dsh-desktop`（默认 session + `Partitions/*`），
+  插件看不到 → 面板永远「未连接」。现在这两种 Electron 布局都会被扫到
+  （`findStorageRoots()` 追加 DSH userData；`listProfiles()` 支持根目录直挂与 `Partitions/*`）。
+  可用 `DSH_DESKTOP_USER_DATA_DIRS` 覆盖非标准安装位置。
+- 文案相应更新：「未连接 · 需登录 platform.deepseek.com」，tooltip 说明
+  Chrome/Edge **或 DSH 内置浏览器**均可，Safari/Firefox 读不到（macOS 沙盒限制）。
+
 ### 生态
 
 - **会话根目录改走官方规则**：优先用官方库 [`@deepseek-ai/dsh-home-paths`](https://www.npmjs.com/package/@deepseek-ai/dsh-home-paths)

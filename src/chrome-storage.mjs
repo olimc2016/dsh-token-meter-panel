@@ -328,6 +328,13 @@ export function findStorageRoots() {
         ? join(homedir(), 'Library', 'Application Support')
         : process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
   const dirs = (BROWSER_ROOTS[os] || BROWSER_ROOTS.linux).map((parts) => join(base, ...parts));
+  // DSH 桌面版（Electron）自己的存储：默认 session + Partitions/*。
+  // 用户在 **DSH 内置浏览器**里登录 platform.deepseek.com 时，登录态落在这里，
+  // 而不是 Chrome —— 不扫这个目录就永远只能显示「未连接」。
+  for (const appDir of (process.env.DSH_DESKTOP_USER_DATA_DIRS || '').split(os === 'win32' ? ';' : ':')) {
+    if (appDir.trim()) dirs.push(appDir.trim());
+  }
+  dirs.push(join(base, '@deepseek-ai', 'dsh-desktop'));
   const sep = os === 'win32' ? ';' : ':';
   for (const extra of (process.env.CHROMIUM_USER_DATA_DIRS || '').split(sep)) dirs.push(extra.trim());
   return [...new Set(dirs)].filter((p) => {
@@ -342,7 +349,22 @@ export function findStorageRoots() {
 /** 列出 User Data 根目录下真正带 Local Storage/leveldb 的 profile（Default 优先） */
 function listProfiles(root, maxProfiles) {
   const found = [];
+  const hasStore = (dir) => existsSync(join(dir, 'Local Storage', 'leveldb', 'CURRENT'));
   try {
+    // Electron 应用（含 DSH 桌面版）的默认 session：Local Storage 就直接在根下
+    if (hasStore(root)) found.push({ profile: '.', leveldb: join(root, 'Local Storage', 'leveldb') });
+    // 分区 session（内置浏览器/嵌入页常各用一个 partition）
+    const partitions = join(root, 'Partitions');
+    if (existsSync(partitions)) {
+      try {
+        for (const name of readdirSync(partitions)) {
+          if (hasStore(join(partitions, name))) {
+            found.push({ profile: `Partitions/${name}`, leveldb: join(partitions, name, 'Local Storage', 'leveldb') });
+          }
+        }
+      } catch { /* 分区不可读就跳过 */ }
+    }
+    // Chromium 系浏览器：<root>/<Profile>/Local Storage/leveldb
     for (const name of readdirSync(root)) {
       const leveldb = join(root, name, 'Local Storage', 'leveldb');
       if (existsSync(join(leveldb, 'CURRENT'))) found.push({ profile: name, leveldb });
