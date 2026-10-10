@@ -1,0 +1,44 @@
+# 跨平台自检：push / PR 时在 Linux 与 Windows 两套 runner 上都跑一遍 npm test。
+#
+# 为什么需要：本仓库曾经的 bug 都是「只在作者那台 Windows 上成立」的假设引起的
+#   - tools/*.mjs 里写死 C:/Users/... 与 F:/DSH/... → 别的机器上自检直接崩
+#   - 会话日志代际去重只特判 v3 → 升级到 v4 后漏算 / 翻倍
+#   - 计费 provider 只认 deepseek-official → 桌面端账号登录的用户面板恒为 0
+# 这些 test 都能抓到，但只在有人手动跑的时候。放进 CI 才不会退回去。
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dev deps
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      # 干净 runner 上没有本地 DSH profile，schemastery 由 npm install 提供；
+      # setup 只在有 profile 的开发机上才有意义，因此这里不跑它。
+      - name: Test
+        run: npm test
+
+      # lib/client.js 是提交进仓库的构建产物。这里从源码重建一次并让烟测跑新产物，
+      # 用来抓「src/client/index.js 坏了但 lib/client.js 还是旧的」这种状态。
+      # 刻意**不**做 git diff 断言：仓库没有 lockfile，esbuild 小版本漂移会让产物字节不同。
+      - name: Rebuild client bundle from source and smoke it
+        run: |
+          npm run build
+          node tools/smoke-client.mjs
