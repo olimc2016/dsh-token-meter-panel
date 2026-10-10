@@ -56,6 +56,10 @@ const zh = {
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
   'totalSpent': '累计消费',
+  'windowToday': '今日',
+  'window7': '近 7 天',
+  'window30': '近 30 天',
+  'windowMonth': '本月',
   'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
   'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
@@ -161,6 +165,10 @@ const en = {
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
   'totalSpent': 'Total spent',
+  'windowToday': 'Today',
+  'window7': 'Last 7d',
+  'window30': 'Last 30d',
+  'windowMonth': 'This month',
   'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
   'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
   'noBrowser': 'no Chrome/Edge detected (optional)',
@@ -618,6 +626,31 @@ function TokenMeterPanel(props) {
     .map((k) => ({ date: k, ...(days[k] ?? {}) }))
     .filter((d) => (d.cny ?? 0) > 0 || (d.calls ?? 0) > 0);
 
+  /**
+   * 四个窗口的金额：今日 / 近 7 天 / 近 30 天 / 本月。
+   * 数据源与主数字一致：官方用量可用时用官方按天数据（账号级、免登录），否则用本地日志聚合。
+   * 官方 days 的值可能是裸金额，本地 days 是 { cny, ... } —— 两种形状都兼容。
+   */
+  const daySrc = (data.meterSource === 'official' && data.official?.ok && data.official.days
+    && Object.keys(data.official.days).length) ? data.official.days : days;
+  const cnyOfKey = (m, k) => {
+    const v = m?.[k];
+    if (v === null || v === undefined) return 0;
+    return Number(typeof v === 'object' ? (v.cny ?? 0) : v) || 0;
+  };
+  const keysBack = (n) => Array.from({ length: n }, (_, i) => new Date(Date.now() - i * 86400000 + 8 * 3600e3).toISOString().slice(0, 10));
+  const sumKeys = (keys) => keys.reduce((acc, k) => acc + cnyOfKey(daySrc, k), 0);
+  const money4 = (() => {
+    const last30 = keysBack(30);
+    const monthKeys = Object.keys(daySrc ?? {}).filter((k) => k.startsWith(today.slice(0, 7)));
+    return [
+      { key: 'today', label: t('windowToday'), value: cnyOfKey(daySrc, today), hero: true },
+      { key: 'd7', label: t('window7'), value: sumKeys(last30.slice(0, 7)) },
+      { key: 'd30', label: t('window30'), value: sumKeys(last30) },
+      { key: 'month', label: t('windowMonth'), value: sumKeys(monthKeys) },
+    ];
+  })();
+
   const budget = Number(data.config?.dailyBudget) || 0;
   const usedPct = budget > 0 ? pct(D.cny, budget) : 0;
   const alertPct = Number(data.config?.alertAtPercent) || 80;
@@ -826,6 +859,26 @@ function TokenMeterPanel(props) {
           ]),
         ]),
         ]),
+        /* 四个窗口金额：今日 / 近 7 天 / 近 30 天 / 本月 —— 整行 2×2，跟在主数字后面 */
+        React.createElement('div', {
+          key: 'money4',
+          style: {
+            flex: '1 1 100%', marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border1}`,
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px 12px',
+          },
+        }, money4.map((m) => React.createElement('div', {
+          key: m.key,
+          style: { display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 },
+        }, [
+          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, m.label),
+          React.createElement('span', {
+            key: 'v',
+            style: {
+              marginLeft: 'auto', fontSize: 15, fontWeight: m.hero ? 700 : 650,
+              color: m.hero ? C.label : C.label2, fontVariantNumeric: 'tabular-nums',
+            },
+          }, `¥${fmtMoney(m.value)}`),
+        ]))),
         /* 账户余额：单独成块、数字字号 23px（原来是 11px 的小字里跟一截文字，太不显眼）。
            点一下 = 余额和用量一起重新取数；tooltip 说明数据来自账号还是 API Key。 */
         React.createElement('div', {
