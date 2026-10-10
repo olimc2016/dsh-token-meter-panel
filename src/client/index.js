@@ -60,6 +60,19 @@ const zh = {
   'window7': '近 7 天',
   'window30': '近 30 天',
   'windowMonth': '本月',
+  'authAccount': '账号登录态',
+  'authBrowser': '浏览器登录态',
+  'timesShort': '次',
+  'totalTokens': '总 token',
+  'perCall': '单次花费',
+  'perCallHint': '今日消费 ÷ 调用次数，单位：元/次',
+  'composeTitle': '总 token 构成',
+  'colItem': '项目',
+  'colPrice': '单价 当前/高峰',
+  'colUsage': '今日用量',
+  'colSubtotal': '小计',
+  'todayTotal': '今日合计',
+  'rateFootnote': '单价：元/百万 token。空闲档 flash ¥0.02/¥1/¥4、v4-pro ¥0.15/¥4.5/¥13.5，高峰为其两倍。口径：API 官方价目表。',
   'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
   'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
@@ -169,6 +182,19 @@ const en = {
   'window7': 'Last 7d',
   'window30': 'Last 30d',
   'windowMonth': 'This month',
+  'authAccount': 'account session',
+  'authBrowser': 'browser session',
+  'timesShort': 'calls',
+  'totalTokens': 'Total tokens',
+  'perCall': 'Per call',
+  'perCallHint': "today's cost ÷ calls (CNY per call)",
+  'composeTitle': 'Token mix',
+  'colItem': 'Item',
+  'colPrice': 'Unit price now/peak',
+  'colUsage': 'Usage today',
+  'colSubtotal': 'Subtotal',
+  'todayTotal': 'Today total',
+  'rateFootnote': 'Unit price: CNY per million tokens. Off-peak flash ¥0.02/¥1/¥4, v4-pro ¥0.15/¥4.5/¥13.5; peak is double. Source: official API price list.',
   'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
   'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
   'noBrowser': 'no Chrome/Edge detected (optional)',
@@ -395,6 +421,31 @@ function Stat({ label, value, unit, color, extra, t, surface }) {
       unit ? React.createElement('span', { key: 'u', style: { fontSize: 12, fontWeight: 600, color: C.label3, marginLeft: 1 } }, unit) : null,
       extra ? React.createElement('span', { key: 'e', style: { fontSize: 12, fontWeight: 500, color: C.label3 } }, extra) : null,
     ]),
+  ]);
+}
+
+/** 小格子：标签 + 数值（第二栏「均值三连」用） */
+function MiniStat({ label, value, hint }) {
+  return React.createElement('div', {
+    title: hint,
+    style: {
+      border: `1px solid ${C.border1}`, borderRadius: 9, padding: '7px 9px',
+      background: 'var(--dsw-alias-bg-layer-1, rgba(128,128,128,.05))',
+    },
+  }, [
+    React.createElement('div', { key: 't', style: { fontSize: 11, color: C.label3 } }, label),
+    React.createElement('div', {
+      key: 'v',
+      style: { fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums', marginTop: 1 },
+    }, value),
+  ]);
+}
+
+/** 图例小圆点 + 文案（构成条用） */
+function LegendDot({ color, text }) {
+  return React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } }, [
+    React.createElement('i', { key: 'i', style: { width: 8, height: 8, borderRadius: 3, background: color, display: 'inline-block' } }),
+    React.createElement('span', { key: 't' }, text),
   ]);
 }
 
@@ -800,7 +851,7 @@ function TokenMeterPanel(props) {
     /* 主指标 */
     React.createElement('div', {
       key: 'hero',
-      style: { display: 'grid', gridTemplateColumns: 'minmax(250px, 1.05fr) minmax(300px, 1.15fr) minmax(230px, 0.9fr)', gap: 12 },
+      style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 },
     }, [
       React.createElement('div', {
         key: 'spend',
@@ -944,9 +995,15 @@ function TokenMeterPanel(props) {
               style: { fontSize: 11, color: C.label3, marginBottom: 2, fontVariantNumeric: 'tabular-nums' },
             }, off?.ok
               ? [
-                React.createElement('span', { key: 'src' }, `来源 platform.deepseek.com/api/v0/usage`),
-                off.auto ? React.createElement('span', { key: 'au', style: { marginLeft: 6, color: C.ok } }, `· ${t('autoSession')}`) : null,
-                React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
+                // 徽标化：接口地址/登录态细节进 tooltip，正文只留「账号登录态 · 187 次」
+                React.createElement('span', {
+                  key: 'badge',
+                  title: `platform.deepseek.com/api/v0/usage${off.ref ? ` · ${off.ref}` : ''} · ${off.auth === 'account' ? t('authAccount') : t('authBrowser')}`,
+                  style: {
+                    display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600,
+                    color: C.ok, border: `1px solid ${C.ok}`, borderRadius: 999, padding: '1px 7px',
+                  },
+                }, `${off.auth === 'account' ? t('authAccount') : t('authBrowser')} · ${off.requests ?? '—'} ${t('timesShort')}`),
               ]
               : [
                 // 正文只留一句短话；为什么需要它、支持哪些浏览器都放进 tooltip，别糊在面板上
@@ -984,31 +1041,34 @@ function TokenMeterPanel(props) {
         ]),
         budget > 0
           ? React.createElement('div', { key: 'p', style: { marginTop: 10 } }, [
-            React.createElement('div', { key: 'tw', style: { position: 'relative' } }, [
-              React.createElement('div', {
-                key: 'track',
-                style: { height: 8, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))', overflow: 'hidden' },
-              }, React.createElement('div', {
-                style: {
-                  height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`,
-                  background: over ? C.error : warn ? C.warn : C.brand,
-                  transition: 'width .3s ease',
-                },
-              })),
-              React.createElement('div', {
-                key: 'tick',
-                title: `${t('warnLine')} ${alertPct}%`,
-                style: {
-                  position: 'absolute', left: `${Math.min(alertPct, 100)}%`, top: -3, width: 2, height: 14,
-                  background: C.warn, opacity: 0.7, borderRadius: 2,
-                },
-              }),
+            React.createElement('div', {
+              key: 'head',
+              style: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 11, marginBottom: 6 },
+            }, [
+              React.createElement('span', { key: 'l', style: { color: C.label3 } }, `${t('budgetUsed')} ${money(budget)}`),
+              React.createElement('span', {
+                key: 'v',
+                style: { marginLeft: 'auto', color: over ? C.error : C.label2, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
+              }, `${t('used')} ${usedPct.toFixed(1)}% · ${t('remain')} ${money(Math.max(0, budget - D.cny))}`
+                + (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ⚠ ${t('warnLine')} ${alertPct}%` : '')),
             ]),
             React.createElement('div', {
-              key: 'txt',
-              style: { fontSize: 11, color: over ? C.error : C.label3, marginTop: 6 },
-            }, `${t('budgetUsed')} ${money(budget)} · ${t('used')} ${usedPct.toFixed(1)}% · ${t('remain')} ${money(Math.max(0, budget - D.cny))}` +
-              (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ${usedPct >= alertPct ? '⚠' : ''}` : '')),
+              key: 'track',
+              style: { position: 'relative', height: 8, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))' },
+            }, [
+              React.createElement('div', {
+                key: 'fill',
+                style: {
+                  height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`, borderRadius: 99,
+                  background: over ? C.error : warn ? C.warn : C.brand, transition: 'width .3s ease',
+                },
+              }),
+              alertPct > 0 && alertPct < 100 ? React.createElement('div', {
+                key: 'tick',
+                title: `${t('warnLine')} ${alertPct}%`,
+                style: { position: 'absolute', left: `${alertPct}%`, top: -2, width: 2, height: 12, background: C.warn, opacity: 0.65, borderRadius: 2 },
+              }) : null,
+            ]),
           ])
           : null,
       ]),
@@ -1025,6 +1085,52 @@ function TokenMeterPanel(props) {
         }),
         React.createElement(Stat, { key: '3', t, surface: S.stat, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
         React.createElement(Stat, { key: '4', t, surface: S.stat, label: t('output'), color: C.out, value: fmt(D.out) }),
+        /* 均值三连：总 token / 调用 / 单次花费（元/次，金额小，4 位小数） */
+        React.createElement('div', {
+          key: 'avg',
+          style: {
+            gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
+            borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2,
+          },
+        }, [
+          React.createElement(MiniStat, { key: 'tt', label: t('totalTokens'), value: fmt(D.hit + D.miss + D.out) }),
+          React.createElement(MiniStat, { key: 'c', label: t('calls'), value: `${D.calls} ${t('timesShort')}` }),
+          React.createElement(MiniStat, {
+            key: 'pc', label: t('perCall'), hint: t('perCallHint'),
+            value: D.calls > 0 ? `¥${(D.cny / D.calls).toFixed(4)}` : '—',
+          }),
+        ]),
+        /* 总 token 构成：命中 / 未命中 / 输出 的占比条 */
+        React.createElement('div', {
+          key: 'compose',
+          style: { gridColumn: '1 / -1', borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2, fontSize: 11 },
+        }, (() => {
+          const tot = D.hit + D.miss + D.out;
+          const seg = (n, color) => (tot > 0
+            ? React.createElement('i', { key: color, style: { flexGrow: Math.max(n, tot / 2000), background: color } })
+            : null);
+          return [
+            React.createElement('div', { key: 'h', style: { display: 'flex', alignItems: 'baseline', gap: 8 } }, [
+              React.createElement('span', { key: 'l', style: { color: C.label3 } }, t('composeTitle')),
+              React.createElement('span', {
+                key: 'v',
+                style: { marginLeft: 'auto', color: C.label2, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
+              }, fmt(tot)),
+            ]),
+            React.createElement('div', {
+              key: 'bar',
+              style: { display: 'flex', height: 9, borderRadius: 99, overflow: 'hidden', marginTop: 7, background: C.border1 },
+            }, [seg(D.hit, C.hit), seg(D.miss, C.miss), seg(D.out, C.out)]),
+            React.createElement('div', {
+              key: 'lg',
+              style: { display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, color: C.label3, marginTop: 5 },
+            }, [
+              React.createElement(LegendDot, { key: 'h', color: C.hit, text: `${t('hitInput')} ${fmt(D.hit)}${tot > 0 ? ` · ${((100 * D.hit) / tot).toFixed(1)}%` : ''}` }),
+              React.createElement(LegendDot, { key: 'm', color: C.miss, text: `${t('missInput')} ${fmt(D.miss)}` }),
+              React.createElement(LegendDot, { key: 'o', color: C.out, text: `${t('output')} ${fmt(D.out)}` }),
+            ]),
+          ];
+        })()),
         /* 金额公式：峰/谷分开算，再汇总（合计以官方金额为准） */
         React.createElement('div', {
           key: 'formula',
@@ -1091,10 +1197,47 @@ function TokenMeterPanel(props) {
             data.peakNow ? t('peak') : t('offpeak')),
         ]),
         React.createElement('div', { key: 'w', style: { fontSize: 10.5, lineHeight: 1.6 } }, t('peakWindow')),
-        React.createElement('div', { key: 'cap', style: { fontSize: 10.5, marginTop: 8 } },
-          `${t('unitPrices')}（${t('hitInput')} / ${t('missInput')} / ${t('output')}）`),
-        priceRow(t('peakShort'), cfgRates?.peak),
-        priceRow(t('offShort'), cfgRates?.offPeak),
+        (() => {
+          const peakSet = cfgRates?.peak?.['deepseek-flash'];
+          const rows = [
+            { k: 'hit', label: t('hitInput'), now: unit.hit, high: peakSet?.cacheHit, tokens: D.hit },
+            { k: 'miss', label: t('missInput'), now: unit.miss, high: peakSet?.cacheMiss, tokens: D.miss },
+            { k: 'out', label: t('output'), now: unit.out, high: peakSet?.output, tokens: D.out },
+          ];
+          const td = (key, text, style) => React.createElement('td', { key, style }, text);
+          const th = (key, text, align) => React.createElement('th', {
+            key, style: { textAlign: align, fontSize: 10.5, fontWeight: 600, color: C.label3, padding: '2px 4px' },
+          }, text);
+          const num = { textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+          const line = { borderTop: `1px solid ${C.border1}` };
+          const sumRow = (key, label, value, strong) => React.createElement('tr', { key }, [
+            td('l', label, { ...line, padding: '3px 4px', textAlign: 'right', color: strong ? C.label2 : C.label3, colSpan: 3, fontWeight: strong ? 700 : 400 }),
+            td('v', value, { ...line, ...num, padding: '3px 4px', fontWeight: strong ? 750 : 650, color: strong ? C.label : C.label2 }),
+          ]);
+          return React.createElement('table', {
+            key: 'merge',
+            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11.5, marginTop: 9 },
+          }, [
+            React.createElement('thead', { key: 'th' }, React.createElement('tr', null, [
+              th('i', t('colItem'), 'left'), th('p', t('colPrice'), 'right'), th('u', t('colUsage'), 'right'), th('s', t('colSubtotal'), 'right'),
+            ])),
+            React.createElement('tbody', { key: 'tb' }, [
+              ...rows.map((r) => React.createElement('tr', { key: r.k }, [
+                td('i', r.label, { ...line, padding: '3px 4px', color: C.label2 }),
+                td('p', [
+                  React.createElement('b', { key: 'a', style: { color: C.ok } }, `¥${r.now}`),
+                  React.createElement('span', { key: 'b', style: { color: C.label3 } }, ` / ¥${r.high ?? '—'}`),
+                ], { ...line, ...num, padding: '3px 4px' }),
+                td('u', fmtM(r.tokens), { ...line, ...num, padding: '3px 4px' }),
+                td('s', money((r.tokens / 1e6) * (r.now ?? 0)), { ...line, ...num, padding: '3px 4px', fontWeight: 650 }),
+              ])),
+              D.tier ? sumRow('off', `${t('offpeak')}${t('sumLabel')}`, money(D.tier.offPeak?.cny ?? 0)) : null,
+              D.tier ? sumRow('pk', `${t('peak')}${t('sumLabel')}`, money(D.tier.peak?.cny ?? 0)) : null,
+              sumRow('all', t('todayTotal'), money(D.cny), true),
+            ].filter(Boolean)),
+          ]);
+        })(),
+        React.createElement('div', { key: 'note', style: { fontSize: 10.5, marginTop: 8, lineHeight: 1.6 } }, t('rateFootnote')),
       ]),
     ]),
 
@@ -1211,7 +1354,7 @@ function TokenMeterPanel(props) {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 9.5, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums',
                 },
-              }, h >= 34 && entry.hitRate != null && entry.hitRate > 0 ? `${entry.hitRate}%` : null),
+              }, null),
             ])
             : React.createElement('div', {
               key: 'z',
@@ -1494,8 +1637,10 @@ function TokenMeterPanel(props) {
       key: 'foot',
       style: { marginTop: 12, fontSize: 11, color: C.label3, lineHeight: 1.8 },
     }, [
-      React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件${data.filesReused > 0 ? `（复用 ${data.filesReused}）` : ''} · 扫描 ${data.elapsedMs}ms${data.filesOutsideWindow > 0 ? ` · 窗口外 ${data.filesOutsideWindow}` : ''}`),
-      React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}${data.partialScan ? ` · ${t('scanning')}` : ''}`),
+      React.createElement('div', { key: 'ab' },
+        `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}${data.partialScan ? ` · ${t('scanning')}` : ''}`
+        + ` · ${data.filesScanned} 个会话文件${data.filesReused > 0 ? `（复用 ${data.filesReused}）` : ''} · 扫描 ${data.elapsedMs}ms`
+        + (data.filesOutsideWindow > 0 ? ` · 窗口外 ${data.filesOutsideWindow}` : '')),
       /* 版本号 + 开源协议 + 更新提示 */
       React.createElement('div', {
         key: 'ver',
