@@ -1319,7 +1319,7 @@ function TokenMeterPanel(props) {
           key: 'range',
           style: { flex: 1, textAlign: 'center', fontSize: 10, color: C.label3, fontVariantNumeric: 'tabular-nums' },
         }, `${trend_[0].key.slice(5)} → ${trend_[trend_.length - 1].key.slice(5)}`)]
-        : trend_.map(({ key, entry }) => {
+        : trend_.map(({ key, entry }, index) => {
           const total = entry ? entry.hit + entry.miss + entry.out : 0;
           const isToday = key === today;
           return React.createElement('div', {
