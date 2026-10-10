@@ -244,6 +244,20 @@ const hhmm = (ms) => {
 };
 const clock = (ms) => new Date(ms).toTimeString().slice(0, 8);
 
+/**
+ * 金额显示：官方平台给的是 16 位小数的十进制字符串（如 91.2898273800000000），
+ * 原样贴出来没法看。按量级收敛到 2/4/6 位，极小金额不四舍五入成 0.00。
+ * 原始字符串仍可通过 tooltip 看到。
+ */
+function fmtMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? '—');
+  if (n === 0) return '0.00';
+  const abs = Math.abs(n);
+  const digits = abs >= 0.01 ? 2 : abs >= 0.0001 ? 4 : 6;
+  return n.toFixed(digits);
+}
+
 const C = {
   // 三色（方案 B：青绿 / 琥珀 / 靛蓝）—— 色相 165°/35°/245°，两两间隔 ≥80°，
   // 图例 9px 小色块并排也能一眼分开；绿=命中省钱、琥珀=未命中花钱，语义直觉一致。
@@ -778,7 +792,7 @@ function TokenMeterPanel(props) {
         React.createElement('div', {
           key: 'bal',
           onClick: () => { balance.reload(); refresh(); },
-          title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}`,
+          title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}${balInfo ? ` · ${balCur}${balInfo.total_balance}` : ''}`,
           style: {
             marginTop: 9, display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
             padding: '5px 12px 6px', borderRadius: 12, cursor: 'pointer', userSelect: 'none',
@@ -793,14 +807,14 @@ function TokenMeterPanel(props) {
               style: { fontSize: 23, fontWeight: 750, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' },
             }, [
               React.createElement('span', { key: 'c', style: { fontSize: 13, fontWeight: 600, color: C.label2, marginRight: 1 } }, balCur),
-              String(balInfo.total_balance),
+              fmtMoney(balInfo.total_balance),
             ])
             : React.createElement('span', {
               key: 'e',
               style: { fontSize: 12.5, fontWeight: 600, color: balData && balData.ok === false ? C.warn : C.label3 },
             }, balText),
           balGranted
-            ? React.createElement('span', { key: 'g', style: { fontSize: 10.5, color: C.label3 } }, `${t('inclGranted')} ${balCur}${balGranted}`)
+            ? React.createElement('span', { key: 'g', style: { fontSize: 10.5, color: C.label3 } }, `${t('inclGranted')} ${balCur}${fmtMoney(balGranted)}`)
             : null,
           balSource
             ? React.createElement('span', {
