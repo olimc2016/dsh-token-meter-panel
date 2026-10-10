@@ -55,6 +55,7 @@ const zh = {
   'historyTitle': '历史（按天）',
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
+  'notConnectedChrome': '未连接 · 用 Chrome 登录',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
   'officialLoading': '正在获取官方数据…',
   'firstLoad': '首次加载，请稍等',
@@ -73,7 +74,7 @@ const zh = {
   'copied': '已复制 ✓',
   'viewRelease': '发布说明',
   'connectOfficial': '连接',
-  'connectHint': '可选的对账数据：在 Chrome/Edge 里登录 platform.deepseek.com，登录态会自动读取（Safari/Firefox 不支持）。余额与本地花费不需要它',
+  'connectHint': '官方用量是可选的对账数据：需要在 Chrome/Edge 里登录 platform.deepseek.com —— 登录态从浏览器本地存储自动读取，Safari/Firefox 读不到（macOS 沙盒限制）。余额与本地花费不需要它',
   'localEstimate': '本地推算',
   'diffLabel': '差',
   'officialOff': '官方用量已关闭',
@@ -157,6 +158,7 @@ const en = {
   'historyTitle': 'History (daily)',
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
+  'notConnectedChrome': 'not connected · sign in via Chrome',
   'noBrowser': 'no Chrome/Edge detected (optional)',
   'officialLoading': 'fetching official data…',
   'firstLoad': 'First load, please wait',
@@ -868,7 +870,7 @@ function TokenMeterPanel(props) {
                 // 正文只留一句短话；为什么需要它、支持哪些浏览器都放进 tooltip，别糊在面板上
                 React.createElement('span', { key: 'why', title: t('connectHint') }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
                   : off?.reason === 'disabled' ? t('officialOff')
-                    : off?.reason === 'no-credential' ? t('notConnected')
+                    : off?.reason === 'no-credential' ? t('notConnectedChrome')
                       : off?.reason === 'no-browser' ? t('noBrowser')
                         : (off?.error ?? t('balanceFailed'))} `),
                 // 「连接」只在真的可能连上时给（没有 Chromium 系浏览器时不给，免得白跑一趟）
