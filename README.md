@@ -292,7 +292,16 @@ npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 > `npm test` 在**任何平台、任何机器**上都能跑：需要会话日志的自检找不到日志时自动跳过，
 > 不依赖任何人的本机路径。CI（[`.github/workflows/test.yml`](.github/workflows/test.yml)）
 > 会在 ubuntu 与 windows 两套 runner 上各跑一遍，防止再出现「只在我这台机器上成立」的假设。
+### 改界面时的自查（不用装/不用重启 DSH）
 
+```bash
+node tools/preview.mjs --open        # 用真实日志数据 + 真 bundle 渲染一页面板预览，浏览器直接看
+node tools/preview.mjs --width 620   # 窄宽度再看一眼响应式表现
+```
+
+`tools/preview.mjs` 用一个极小的 React 垫片把面板产出的元素树落成 DOM（面板全部用内联样式，
+所以视觉与真机等价），数据来自本机会话日志，余额由假账号服务注入 —— 改配色/间距/布局时比每次重启
+DSH 快得多；要更新市场截图也可以用它批量出图。
 目录结构：
 
 ```

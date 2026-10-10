@@ -52,7 +52,7 @@ const zh = {
   'officialLabel': '官方',
   'localShort': '本地日志',
   'yesterdayLabel': '昨天',
-  'historyTitle': '历史（官方查询）',
+  'historyTitle': '历史（按天）',
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
@@ -154,7 +154,7 @@ const en = {
   'officialLabel': 'Official',
   'localShort': 'local log',
   'yesterdayLabel': 'yesterday',
-  'historyTitle': 'History (official query)',
+  'historyTitle': 'History (daily)',
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
   'noBrowser': 'no Chrome/Edge detected (optional)',
@@ -753,13 +753,17 @@ function TokenMeterPanel(props) {
     /* 主指标 */
     React.createElement('div', {
       key: 'hero',
-      style: { display: 'grid', gridTemplateColumns: 'minmax(250px, 1.05fr) minmax(300px, 1.15fr) minmax(230px, 0.9fr)', gap: 12 },
+      style: { display: 'flex', flexWrap: 'wrap', gap: 12 },
     }, [
       React.createElement('div', {
         key: 'spend',
-        // 今日消费与余额并排：左列是消费与说明，右列是余额块（余额块自己声明 gridColumn: 2）
-        style: { ...S.hero, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: 16, alignItems: 'start' },
+        // 今日消费与余额并排：宽的时候左右排（左=消费与说明，右=余额块），
+        // 窄的时候自动换行（余额掉到下一行）—— 用 flex-wrap 而不是固定网格，
+        // 否则卡片一窄，左边就会被右边那块 `auto` 宽度挤成一字一行。
+        // 独占一整行：这样「今日消费」和「账户余额」能真正并排，下面两张副卡也各宽一倍
+        style: { ...S.hero, flex: '1 1 100%', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
       }, [
+        React.createElement('div', { key: 'left', style: { flex: '1 1 220px', minWidth: 0 } }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
         React.createElement('div', {
           key: 'n',
@@ -807,6 +811,7 @@ function TokenMeterPanel(props) {
             t('refresh'),
           ]),
         ]),
+        ]),
         /* 账户余额：单独成块、数字字号 23px（原来是 11px 的小字里跟一截文字，太不显眼）。
            点一下 = 余额和用量一起重新取数；tooltip 说明数据来自账号还是 API Key。 */
         React.createElement('div', {
@@ -814,8 +819,7 @@ function TokenMeterPanel(props) {
           onClick: () => { balance.reload(); refresh(); },
           title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}${balInfo ? ` · ${balCur}${balInfo.total_balance}` : ''}`,
           style: {
-            // 今日消费与余额并排：卡片本身是 2 列网格，余额显式占右列（跨整高），其余内容自然落在左列
-            gridColumn: 2, gridRow: '1 / span 4', alignSelf: 'start',
+            flex: '0 0 auto',
             display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
             padding: '5px 12px 6px', borderRadius: 12, cursor: 'pointer', userSelect: 'none',
             border: `1px solid ${C.border}`,
@@ -846,7 +850,7 @@ function TokenMeterPanel(props) {
             : null,
           React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
         ]),
-        React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
+        React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
             const off = data.official;
             const diff = off?.ok ? Math.abs(Number(off.cny) - actual) : null;

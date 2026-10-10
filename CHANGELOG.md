@@ -45,6 +45,16 @@
 - 新增 CI [.github/workflows/test.yml](.github/workflows/test.yml)：ubuntu + windows 各跑一遍 `npm test`。
 - 去掉 `sliceDays` 里一行无用代码。
 
+### 界面
+
+- **修掉「消费与余额并排」引发的布局塌陷**：卡片一窄，`minmax(0, 1fr) auto` 会把「今日消费」
+  压成一字一行（真机预览实测到的）。现在消费卡用 `flex-wrap`（宽了并排、窄了自动换行），
+  hero 也从固定三列网格改成 flex：**消费 + 余额独占一整行真正并排**，两张副卡等分下一行
+  （`grid auto-fit` 在只有两张卡时会留空槽）。
+- 历史表的标题从「历史（官方查询）」改成「历史（按天）」——数据现在也可能来自本地日志。
+- 新增 [tools/preview.mjs](tools/preview.mjs)：用真实日志数据 + 真实 `lib/client.js` 在浏览器里
+  自渲染一页面板预览（内置极小 React 垫片），改 UI 时不必反复重启 DSH，也可用来重出市场截图。
+
 ### 性能
 
 - **增量扫描**：`aggregate()` 支持传入可复用的文件级缓存（宿主跨次保留）。会话日志文件按
