@@ -753,7 +753,7 @@ function TokenMeterPanel(props) {
     /* 主指标 */
     React.createElement('div', {
       key: 'hero',
-      style: { display: 'flex', flexWrap: 'wrap', gap: 12 },
+      style: { display: 'grid', gridTemplateColumns: 'minmax(250px, 1.05fr) minmax(300px, 1.15fr) minmax(230px, 0.9fr)', gap: 12 },
     }, [
       React.createElement('div', {
         key: 'spend',
@@ -761,7 +761,7 @@ function TokenMeterPanel(props) {
         // 窄的时候自动换行（余额掉到下一行）—— 用 flex-wrap 而不是固定网格，
         // 否则卡片一窄，左边就会被右边那块 `auto` 宽度挤成一字一行。
         // 独占一整行：这样「今日消费」和「账户余额」能真正并排，下面两张副卡也各宽一倍
-        style: { ...S.hero, flex: '1 1 100%', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
+        style: { ...S.hero, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
       }, [
         React.createElement('div', { key: 'left', style: { flex: '1 1 220px', minWidth: 0 } }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
@@ -819,14 +819,14 @@ function TokenMeterPanel(props) {
           onClick: () => { balance.reload(); refresh(); },
           title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}${balInfo ? ` · ${balCur}${balInfo.total_balance}` : ''}`,
           style: {
-            flex: '0 0 auto',
-            display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
-            padding: '5px 12px 6px', borderRadius: 12, cursor: 'pointer', userSelect: 'none',
-            border: `1px solid ${C.border}`,
-            background: 'var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.07))',
+            flex: '1 1 100%', marginTop: 8, paddingTop: 8,
+            display: 'flex', alignItems: 'baseline', gap: 8,
+            borderTop: `1px solid ${C.border1}`,
+            cursor: 'pointer', userSelect: 'none',
           },
         }, [
-          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, marginRight: 3 } }, t('balance')),
+          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, t('balance')),
+          React.createElement('span', { key: 'v', style: { display: 'flex', alignItems: 'baseline', gap: 6, marginLeft: 'auto', minWidth: 0 } }, [
           balInfo
             ? React.createElement('span', {
               key: 'n',
@@ -849,6 +849,7 @@ function TokenMeterPanel(props) {
             }, balSource)
             : null,
           React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
+          ]),
         ]),
         React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
