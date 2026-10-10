@@ -2,7 +2,12 @@
  * 宿主半侧烟测：不启动 DSH，直接 import 插件模块，用一个假的 ctx 调用 apply()，
  * 检查：路由是否注册、schema 是否成立、聚合是否能出数、设置读写是否生效。
  * 需要能解析 @deepseek-ai/schemastery —— 本机解析不到时会退化成「无 schema」，仍可跑完。
+ * 另外覆盖两条余额路径（账号 / API Key）与两种桌面布局的更新通道解析（macOS / Windows）。
  */
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+
 // 用相对本文件的路径，别写死任何人的机器路径；URL 本身就是合法的 import specifier
 const target = new URL('../lib/index.js', import.meta.url).href;
 let mod;
@@ -171,6 +176,110 @@ if (bal) {
   const fallbackOk = fallback?.ok === false && fallback?.source === 'apikey' && /未配置凭据|账号未登录/.test(fallback?.error ?? '');
   console.log(`  ${fallbackOk ? 'PASS' : 'FAIL'} 无账号、无凭据时回退 API Key 并给出明确原因：${fallback?.error}`);
   if (!fallbackOk) smokeFailures += 1;
+}
+
+/**
+ * 造一个独立的假 ctx（每个场景一份，互不污染）。
+ * @param {{account?:object, credentials?:object, showBalance?:boolean}} opts
+ */
+function newCtx(opts = {}) {
+  const list = [];
+  const settingsFor = () => ({
+    dailyBudget: 50, alertAtPercent: 80, showBalance: opts.showBalance !== false, officialOnly: true,
+    apiKeyEnv: 'DEEPSEEK_API_KEY', refreshSeconds: 60,
+    offPeak: { 'deepseek-flash': { cacheHit: 0.02, cacheMiss: 1, output: 4 }, 'deepseek-v4-pro': { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 } },
+    peak: { 'deepseek-flash': { cacheHit: 0.04, cacheMiss: 2, output: 8 }, 'deepseek-v4-pro': { cacheHit: 0.3, cacheMiss: 9, output: 27 } },
+  });
+  const ctx = {
+    settings: { register: () => ({ get: settingsFor, watch: () => () => {}, update() {}, replace() {} }) },
+    webServer: { register: (spec) => { list.push(spec); return () => {}; } },
+    get(name) {
+      if (name === 'deepseekAccount') return opts.account ?? undefined;
+      if (name === 'credentials') return opts.credentials ?? undefined;
+      return ctx[name];
+    },
+    logger: Object.assign(() => ({ info() {}, warn() {}, error() {}, debug() {} }), { info() {}, warn() {}, error() {}, debug() {} }),
+    inject(names, cb) { const s = Object.create(this); s.effect = (fn) => { fn(); return { dispose() {} }; }; cb(s); return { dispose() {} }; },
+    effect(cb) { cb(); return { dispose() {} }; },
+  };
+  if (opts.account) ctx.deepseekAccount = opts.account;
+  return { ctx, routes: list };
+}
+
+/** 挂载插件并把某个路由的响应体取回来 */
+async function callRoute(ctxRoutes, path, url, method = 'GET') {
+  const route = ctxRoutes.find((r) => r.path.endsWith(path));
+  let body = '', status = 0;
+  await route.handler({ method, url }, { writeHead: (s) => { status = s; }, end: (b) => { body = b; } });
+  return { status, payload: JSON.parse(body)?.data ?? JSON.parse(body) };
+}
+
+// ---- API Key 路径（回退）：账号未登录时，必须真的按官方 /user/balance 协议发请求 ----
+{
+  console.log('\n-- API Key 回退路径 --');
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), headers: init?.headers ?? {} });
+    return {
+      ok: true, status: 200,
+      json: async () => ({ is_available: true, balance_infos: [{ currency: 'CNY', total_balance: '8.80', granted_balance: '0.00', topped_up_balance: '8.80' }] }),
+    };
+  };
+  try {
+    const { ctx: ctx3, routes: r3 } = newCtx({ credentials: { resolve: async () => ({ value: 'sk-test-key' }) } });
+    mod.apply(ctx3, {});
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const got = await callRoute(r3, '/balance', '/token-meter-panel/balance?refresh=1&locale=en-US');
+    const apiOk = got.payload?.ok === true
+      && got.payload?.source === 'apikey'
+      && got.payload?.balance_infos?.[0]?.total_balance === '8.80'
+      && calls[0]?.url === 'https://api.deepseek.com/user/balance'
+      && calls[0]?.headers?.authorization === 'Bearer sk-test-key';
+    console.log(`  ${apiOk ? 'PASS' : 'FAIL'} url=${calls[0]?.url} auth=${String(calls[0]?.headers?.authorization).replace(/sk-.*/, 'sk-***')} total=${got.payload?.balance_infos?.[0]?.total_balance}`);
+    if (!apiOk) smokeFailures += 1;
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// ---- 更新通道解析：Windows 桌面布局（resources/app.asar）与 macOS 布局（Contents/Resources） ----
+{
+  console.log('\n-- 更新通道解析（两种桌面布局）--');
+  const sim = join(tmpdir(), 'dsh-desktop-layout-sim');
+  rmSync(sim, { recursive: true, force: true });
+  // Windows: <install>/DSH Desktop.exe + <install>/resources/app.asar
+  // 注意：app.asar 是**文件**；它内部的 cli.js 路径普通 fs 看不到（要靠 Electron 的 asar 支持），
+  // 所以这里只造出归档文件本身，解析器判断的也正是它。
+  const winRoot = join(sim, 'win');
+  mkdirSync(join(winRoot, 'resources'), { recursive: true });
+  writeFileSync(join(winRoot, 'resources', 'app.asar'), '');
+  // macOS: <app>/Contents/MacOS/<exe> + <app>/Contents/Resources/app.asar
+  const macRoot = join(sim, 'mac', 'DSH.app', 'Contents');
+  mkdirSync(join(macRoot, 'Resources'), { recursive: true });
+  writeFileSync(join(macRoot, 'Resources', 'app.asar'), '');
+  mkdirSync(join(macRoot, 'MacOS'), { recursive: true });
+
+  const realExec = process.execPath;
+  const checkLayout = async (label, execPath, expectFragment) => {
+    Object.defineProperty(process, 'execPath', { value: execPath, configurable: true });
+    const { ctx, routes: r } = newCtx();
+    mod.apply(ctx, {});
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const got = await callRoute(r, '/health', '/token-meter-panel/health');
+    const ch = got.payload?.updateChannel;
+    const ok = ch?.kind === 'desktop-cli'
+      && String(ch?.cli ?? '').replace(/\\/g, '/').includes(expectFragment);
+    console.log(`  ${ok ? 'PASS' : 'FAIL'} ${label}: kind=${ch?.kind} cli=${ch?.cli}`);
+    if (!ok) smokeFailures += 1;
+  };
+  try {
+    await checkLayout('Windows 布局', join(winRoot, 'DSH Desktop.exe'), '/resources/app.asar/dsh/');
+    await checkLayout('macOS 布局', join(macRoot, 'MacOS', 'DeepSeek Harness'), '/Contents/Resources/app.asar/dsh/');
+  } finally {
+    Object.defineProperty(process, 'execPath', { value: realExec, configurable: true });
+    rmSync(sim, { recursive: true, force: true });
+  }
 }
 
 // 卸载：disposer 应把路由摘干净

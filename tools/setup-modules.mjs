@@ -83,4 +83,7 @@ if (missing.length) {
   }
   console.log('\n提示：schemastery/cosmokit 来自已安装的 DSH profile；esbuild 可用 `npm install --no-save esbuild` 或 `npm i -g esbuild` 装上后重跑本脚本。');
   console.log('缺失只会让「设置 schema 相关自检」和「重建 client bundle」跳过，不影响核心聚合逻辑。');
+  console.log('注意：如果插件是以 `link:` 方式装进 profile（本地开发），profile 的 node_modules 里可能没有 schemastery');
+  console.log('     （link 不会安装目标的依赖），此时 verify-rates 会失败 —— 把包解到本仓库 node_modules 即可。');
+  console.log('     DSH 自己的 app.asar 里有这两个包（dsh/node_modules/@deepseek-ai/{schemastery,cosmokit}）。');
 }
