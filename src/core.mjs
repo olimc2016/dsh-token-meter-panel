@@ -288,11 +288,12 @@ function generationOf(name) {
  * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.vN].jsonl[.zstd]
  * （兼容工作区目录下直接放文件的形态）
  * @param {string} sessionsRoot 会话根目录
- * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number, cache?:Map}} [options]
+ * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number, cache?:Map, sinceMs?:number}} [options]
  *        cache 为一个可复用的 Map<file, {mtimeMs,size,signature,contribution}>：调用方跨次保留它，
  *        未变动的日志文件会被直接复用（filesReused 报告命中数），已变动的重算。
+ *        sinceMs > 0 时只统计「最后一次写入在 sinceMs 之后」的会话（见 filesOutsideWindow）。
  */
-export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0, cache = null } = {}) {
+export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0, cache = null, sinceMs = 0 } = {}) {
   const files = [];
   const listEntries = (p) => {
     try {
@@ -336,7 +337,12 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
         : f.mtimeMs > prev.mtimeMs;
     if (better) newest.set(key, f);
   }
-  const all = [...newest.values()].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  // 时间窗口：只看窗口内有写入的会话文件。日志按 mtime（最后一次写入）取舍 ——
+  // 跨月仍在用的会话 mtime 是新的，照常进来；早已结束的老会话直接不读。
+  // 这样「首次安装要看最近 30 天」不需要把全部历史解压一遍。
+  const inWindow = sinceMs > 0 ? [...newest.values()].filter((f) => f.mtimeMs >= sinceMs) : [...newest.values()];
+  const outsideWindow = newest.size - inWindow.length;
+  const all = inWindow.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const kept = all.slice(0, limit === Infinity ? undefined : limit);
   const skipped = all.slice(kept.length);
 
@@ -407,6 +413,7 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
     sessionsRoot,
     filesScanned: scanned,
     filesReused: reused,
+    filesOutsideWindow: outsideWindow,
     filesSkippedAsStale: skipped.map((f) => f.sessionId),
     unreadableFiles: unreadable,
     newestSourceMtime: newestMtime || null,

@@ -116,6 +116,7 @@ const zh = {
   'source': '数据源',
   'updated': '更新于',
   'partial': '当前会话仍在写入，今日数字是下界',
+  'scanning': '正在补扫历史…',
   'rateLine': '计费口径',
 };
 
@@ -217,6 +218,7 @@ const en = {
   'source': 'Source',
   'updated': 'Updated',
   'partial': 'This session is still appending; today is a lower bound',
+  'scanning': 'backfilling history…',
   'rateLine': 'Pricing',
 };
 
@@ -403,8 +405,10 @@ function useSummary(intervalSec) {
 
   React.useEffect(() => {
     let alive = true;
-    // 首次强制重算（刷新缓存），之后走宿主的 5s TTL 缓存
-    const url = first.current ? `${ROUTE}?refresh=1` : ROUTE;
+    // 首次、以及「上一轮只扫了窗口的一部分」时强制重算：宿主那边未变动的文件走增量缓存，
+    // 所以每一轮只补扫剩下的部分，几轮内把整个统计窗口补齐；扫完之后回到 5s TTL 缓存。
+    const force = first.current || lastSummary?.data?.partialScan === true;
+    const url = force ? `${ROUTE}?refresh=1` : ROUTE;
     first.current = false;
     fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then(async (response) => {
@@ -479,16 +483,18 @@ function TokenMeterPanel(props) {
   // 宿主建议的刷新间隔（来自设置 refreshSeconds），拿到后接管轮询
   const [intervalSec, setIntervalSec] = React.useState(60);
   const { status, data, error, at, refresh } = useSummary(intervalSec);
-  // 官方数据是后台补齐的：首屏等它时快速重试几次（1.2s 一次，最多 8 次），
-  // 这样既不阻塞首屏，也不会让用户干等到下一个 60s 轮询
+  // 官方数据是后台补齐的：首屏等它时快速重试几次（1.5s 一次）；
+  // 首次安装时本地扫描也可能只覆盖了窗口的一部分（partialScan）——同样继续重试：
+  // 宿主那边未变动的文件会走增量缓存，所以每一轮都只补扫剩下的部分，几轮内把 30 天补齐。
   const officialLoading = data?.official?.reason === 'loading';
+  const needsMore = officialLoading || data?.partialScan === true;
   const [officialTries, setOfficialTries] = React.useState(0);
   React.useEffect(() => {
-    if (!officialLoading) { if (officialTries) setOfficialTries(0); return undefined; }
-    if (officialTries >= 25) return undefined;
+    if (!needsMore) { if (officialTries) setOfficialTries(0); return undefined; }
+    if (officialTries >= 40) return undefined;
     const id = setTimeout(() => { setOfficialTries((n) => n + 1); refresh(); }, 1500);
     return () => clearTimeout(id);
-  }, [officialLoading, officialTries, refresh]);
+  }, [needsMore, officialTries, refresh]);
 
   React.useEffect(() => {
     const sec = data?.config?.refreshSeconds;
@@ -591,7 +597,7 @@ function TokenMeterPanel(props) {
   const actual = cHit + cMiss + cOut || D.cny || 0;
 
   // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
-  const historyDays = Object.keys(days).sort().reverse().slice(0, 14)
+  const historyDays = Object.keys(days).sort().reverse().slice(0, 30)
     .map((k) => ({ date: k, ...(days[k] ?? {}) }))
     .filter((d) => (d.cny ?? 0) > 0 || (d.calls ?? 0) > 0);
 
@@ -1383,8 +1389,8 @@ function TokenMeterPanel(props) {
       key: 'foot',
       style: { marginTop: 12, fontSize: 11, color: C.label3, lineHeight: 1.8 },
     }, [
-      React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件 · 扫描 ${data.elapsedMs}ms`),
-      React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}`),
+      React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件${data.filesReused > 0 ? `（复用 ${data.filesReused}）` : ''} · 扫描 ${data.elapsedMs}ms${data.filesOutsideWindow > 0 ? ` · 窗口外 ${data.filesOutsideWindow}` : ''}`),
+      React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}${data.partialScan ? ` · ${t('scanning')}` : ''}`),
       React.createElement('div', { key: 'c' }, `${t('rateLine')}：${data.pricing?.source} （采集于 ${data.pricing?.fetchedAt}）`),
       /* 版本号 + 开源协议 + 更新提示 */
       React.createElement('div', {

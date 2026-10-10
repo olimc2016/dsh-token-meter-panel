@@ -11,7 +11,7 @@
  *
  * 本测试是**自造数据**的：不依赖本机任何会话日志，任何机器上都能跑。
  */
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { zstdCompressSync } from 'node:zlib';
@@ -175,6 +175,26 @@ try {
     const fourth = aggregate(root, { cache, rates });
     check('费率变化 → 不复用任何缓存', fourth.filesReused, 0);
     check('费率翻倍后 cny 翻倍', Number(bucket(fourth).cny.toFixed(4)), Number((bucket(third).cny * 2).toFixed(4)));
+  }
+  console.log('-- 9) 统计窗口：只看窗口内有写入的会话（首次安装按 30 天出数就靠它）');
+  {
+    const a = record('deepseek-official', 'deepseek-flash');
+    const { root } = fixture('--ws-i--', 's-recent', [['session.v4.jsonl.zstd', [a, a]]]);
+    const oldDir = join(root, '--ws-i2--', 's-old');
+    mkdirSync(oldDir, { recursive: true });
+    const oldFile = join(oldDir, 'session.v4.jsonl.zstd');
+    writeLog(oldFile, [a, a, a]);
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000);
+    utimesSync(oldFile, sixtyDaysAgo, sixtyDaysAgo);
+
+    const all = aggregate(root);
+    check('不带窗口：两个会话都算', all.calls, 5);
+    check('不带窗口：filesOutsideWindow=0', all.filesOutsideWindow, 0);
+
+    const win = aggregate(root, { sinceMs: Date.now() - 30 * 86400000 });
+    check('30 天窗口：老会话被排除', win.calls, 2);
+    check('30 天窗口：filesOutsideWindow=1', win.filesOutsideWindow, 1);
+    check('30 天窗口：仍然扫到窗口内的文件', win.filesScanned, 1);
   }
 } finally {
   for (const root of roots) rmSync(root, { recursive: true, force: true });
