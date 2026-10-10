@@ -479,7 +479,8 @@ function useLiveUsage(props) {
  * ------------------------------------------------------------------ */
 function TokenMeterPanel(props) {
   const { t } = props;
-  const [range, setRange] = React.useState(7);
+  // 默认看 30 天：和宿主 historyDays / 官方查询窗口一致，免得刚装好只看到 7 天以为没数据
+  const [range, setRange] = React.useState(30);
   // 宿主建议的刷新间隔（来自设置 refreshSeconds），拿到后接管轮询
   const [intervalSec, setIntervalSec] = React.useState(60);
   const { status, data, error, at, refresh } = useSummary(intervalSec);
@@ -746,7 +747,8 @@ function TokenMeterPanel(props) {
     }, [
       React.createElement('div', {
         key: 'spend',
-        style: S.hero,
+        // 今日消费与余额并排：左列是消费与说明，右列是余额块（余额块自己声明 gridColumn: 2）
+        style: { ...S.hero, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', columnGap: 16, alignItems: 'start' },
       }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
         React.createElement('div', {
@@ -802,7 +804,9 @@ function TokenMeterPanel(props) {
           onClick: () => { balance.reload(); refresh(); },
           title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}${balInfo ? ` · ${balCur}${balInfo.total_balance}` : ''}`,
           style: {
-            marginTop: 9, display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
+            // 今日消费与余额并排：卡片本身是 2 列网格，余额显式占右列（跨整高），其余内容自然落在左列
+            gridColumn: 2, gridRow: '1 / span 4', alignSelf: 'start',
+            display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
             padding: '5px 12px 6px', borderRadius: 12, cursor: 'pointer', userSelect: 'none',
             border: `1px solid ${C.border}`,
             background: 'var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.07))',
@@ -1204,15 +1208,17 @@ function TokenMeterPanel(props) {
       ]),
     ]),
 
-    /* 历史（官方查询） */
-    meterOfficial && historyDays.length
+    /* 历史（官方查询；没连官方时用本地日志，口径以标注为准） */
+    historyDays.length
       ? React.createElement('div', { key: 'hist', style: S.card }, [
         React.createElement('div', {
           key: 'h',
           style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 },
         }, [
           React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('historyTitle')),
-          React.createElement('span', { key: 's' }, `platform.deepseek.com/api/v0/usage · ${historyDays.length} 天`),
+          React.createElement('span', { key: 's' }, meterOfficial
+            ? `platform.deepseek.com/api/v0/usage · ${historyDays.length} 天`
+            : `${t('localShort')} · ${historyDays.length} 天`),
         ]),
         React.createElement('table', { key: 'tb', style: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 8 } }, [
           React.createElement('thead', { key: 'th' }, React.createElement('tr', null,
