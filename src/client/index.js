@@ -31,6 +31,10 @@ const zh = {
   'remain': '剩余',
   'balance': '账户余额',
   'checkBalance': '查询余额',
+  'balanceLoading': '查询中…',
+  'balanceAccount': '账号',
+  'balanceApiKey': 'API Key',
+  'inclGranted': '含赠送',
   'peakHourLabel': '峰值',
   'peakShort': '高峰',
   'offShort': '空闲',
@@ -127,6 +131,10 @@ const en = {
   'remain': 'left',
   'balance': 'Balance',
   'checkBalance': 'Check balance',
+  'balanceLoading': 'loading…',
+  'balanceAccount': 'account',
+  'balanceApiKey': 'API Key',
+  'inclGranted': 'incl. bonus',
   'peakHourLabel': 'peak',
   'peakShort': 'Peak',
   'offShort': 'Off-peak',
@@ -409,21 +417,24 @@ function useSummary(intervalSec) {
   return { ...state, refresh };
 }
 
-function useBalance(enabled, refreshKey) {
+function useBalance(enabled) {
   const [state, setState] = React.useState({ status: 'idle', data: null });
-  const asked = React.useRef(false);
+  const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
-    if (!enabled || asked.current) return undefined;
-    asked.current = true;
+    if (!enabled) return undefined;
     let alive = true;
-    setState({ status: 'loading', data: null });
-    fetch('/token-meter-panel/balance', { cache: 'no-store', credentials: 'same-origin' })
+    // 已经拿到过数字就保留旧值刷新，避免每次轮询把余额闪成「查询中」
+    setState((prev) => ({ status: prev.data ? 'ready' : 'loading', data: prev.data }));
+    const locale = (typeof navigator !== 'undefined' && navigator.language) || 'zh-CN';
+    // tick>0 = 用户手动刷新（宿主会跳过 60s 缓存重新取数）
+    const url = `/token-meter-panel/balance?locale=${encodeURIComponent(locale)}${tick > 0 ? '&refresh=1' : ''}`;
+    fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then((r) => r.json())
       .then((body) => { if (alive) setState({ status: 'ready', data: body?.data ?? null }); })
       .catch(() => { if (alive) setState({ status: 'failed', data: null }); });
     return () => { alive = false; };
-  }, [enabled, refreshKey]);
-  return state;
+  }, [enabled, tick]);
+  return { ...state, reload: () => setTick((n) => n + 1) };
 }
 
 /**
@@ -470,7 +481,7 @@ function TokenMeterPanel(props) {
 
   // 当前会话实时用量（官方 tokenUsage 投影；面板在 root scope，取不到时为 undefined）
   const live = useLiveUsage(props);
-  const balance = useBalance(Boolean(data?.config?.showBalance), data?.generatedAt);
+  const balance = useBalance(Boolean(data?.config?.showBalance));
 
   // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
   const [showRates, setShowRates] = React.useState(false);
@@ -575,11 +586,19 @@ function TokenMeterPanel(props) {
   const warn = budget > 0 && !over && usedPct >= alertPct;
   const delta = prev && prev.cny > 0 ? ((D.cny - prev.cny) / prev.cny) * 100 : null;
 
-  // 头部左上角：更新时间 + 账户余额（余额查询默认关闭，关着时明确写「未开启」而不是留空）
-  const balInfo = balance.data?.ok ? balance.data.balance_infos?.[0] : null;
-  const balText = data.config?.showBalance
-    ? (balInfo ? `¥${balInfo.total_balance}` : t('balanceFailed'))
-    : t('notEnabled');
+  // 余额：桌面端账号登录时宿主走官方账号服务，否则回退 API Key；
+  // 两种来源都归一成 balance_infos，这里只认第一个钱包（宿主保证 CNY 优先）。
+  const balData = balance.data;
+  const balInfo = balData?.ok ? balData.balance_infos?.[0] : null;
+  const balCur = balInfo?.currency === 'USD' ? '$' : '¥';
+  const balGranted = balInfo && Number(balInfo.granted_balance) > 0 ? String(balInfo.granted_balance) : null;
+  const balSource = balData?.source === 'account' ? t('balanceAccount')
+    : balData?.source === 'apikey' ? t('balanceApiKey') : '';
+  const balText = !data.config?.showBalance
+    ? t('notEnabled')
+    : balInfo ? `${balCur}${balInfo.total_balance}`
+      : balance.status === 'loading' ? t('balanceLoading')
+        : (balData?.reason === 'disabled' ? t('notEnabled') : (balData?.error ?? t('balanceFailed')));
 
   // 主数字口径：宿主已按官方用量接口给出天/时数据（meterSource === 'official'）
   const official = data.official;
@@ -732,12 +751,12 @@ function TokenMeterPanel(props) {
             }, `${t('vsPrevOn')} ${deltaLabel} ${shownDelta >= 0 ? '+' : '−'}${Math.abs(shownDelta).toFixed(0)}%`)
             : null,
         ]),
-        /* 顺序按阅读习惯：先看到金额，再看更新时间和余额 */
+        /* 顺序按阅读习惯：先看到金额，再看更新时间/刷新；余额单独成块（见下） */
         React.createElement('div', {
           key: 'meta',
           style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 2, fontVariantNumeric: 'tabular-nums' },
         }, [
-          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
+          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)}`),
           React.createElement('div', {
             key: 'rf',
             onClick: refresh,
@@ -753,6 +772,43 @@ function TokenMeterPanel(props) {
             React.createElement('span', { key: 'i', style: { fontSize: 12, lineHeight: 1 } }, '⟳'),
             t('refresh'),
           ]),
+        ]),
+        /* 账户余额：单独成块、数字字号 23px（原来是 11px 的小字里跟一截文字，太不显眼）。
+           点一下 = 余额和用量一起重新取数；tooltip 说明数据来自账号还是 API Key。 */
+        React.createElement('div', {
+          key: 'bal',
+          onClick: () => { balance.reload(); refresh(); },
+          title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}`,
+          style: {
+            marginTop: 9, display: 'inline-flex', alignItems: 'baseline', gap: 6, width: 'fit-content',
+            padding: '5px 12px 6px', borderRadius: 12, cursor: 'pointer', userSelect: 'none',
+            border: `1px solid ${C.border}`,
+            background: 'var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.07))',
+          },
+        }, [
+          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, marginRight: 3 } }, t('balance')),
+          balInfo
+            ? React.createElement('span', {
+              key: 'n',
+              style: { fontSize: 23, fontWeight: 750, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' },
+            }, [
+              React.createElement('span', { key: 'c', style: { fontSize: 13, fontWeight: 600, color: C.label2, marginRight: 1 } }, balCur),
+              String(balInfo.total_balance),
+            ])
+            : React.createElement('span', {
+              key: 'e',
+              style: { fontSize: 12.5, fontWeight: 600, color: balData && balData.ok === false ? C.warn : C.label3 },
+            }, balText),
+          balGranted
+            ? React.createElement('span', { key: 'g', style: { fontSize: 10.5, color: C.label3 } }, `${t('inclGranted')} ${balCur}${balGranted}`)
+            : null,
+          balSource
+            ? React.createElement('span', {
+              key: 's',
+              style: { fontSize: 10, color: C.label3, padding: '1px 6px', borderRadius: 999, border: `1px solid ${C.border}` },
+            }, balSource)
+            : null,
+          React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
         ]),
         React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {

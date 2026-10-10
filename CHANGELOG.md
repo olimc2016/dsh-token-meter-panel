@@ -1,9 +1,15 @@
 # 变更记录
 
-## 未发布
+## 0.6.5 — 账号余额、余额显示放大、统计口径修正
 
 ### 修复
 
+- **账号登录的用户看不到余额**：余额原来只走 API Key（`https://api.deepseek.com/user/balance`），
+  而桌面端默认是 DeepSeek 账号登录，本机压根没有 `DEEPSEEK_API_KEY`，于是永远显示「未配置凭据」。
+  现在优先调用官方账号服务 `ctx.get('deepseekAccount').getBalance()`（账号 token 走 platform 的
+  `/api/v0/users/get_user_summary`），把 `normal_wallets`（充值）/ `bonus_wallets`（赠送）归一成
+  `balance_infos`（`total = 充值 + 赠送`，十进制字符串相加，不会出现 `13.999999999`）；
+  未登录账号时才回退 API Key 路径。按官方约定通过 `x-client-*` 头上报调用方版本/语言/时区。
 - **桌面端账号登录的用户面板恒为 0**：计费 provider 原来只认 `deepseek-official`（API Key 路由），
   而桌面端账号登录走的是 `deepseek-account`，本地日志里这些调用被整体过滤掉。
   现在官方计费口径是这两个路由的集合（`OFFICIAL_PROVIDERS`），本机实测立刻出数。
@@ -15,7 +21,14 @@
   用户 shell 里的 `dsh` 不在其中。现在优先用桌面端自带 CLI 入口
   （`app.asar/.../dsh-desktop-host/lib/cli.js` + `ELECTRON_RUN_AS_NODE`），找不到才回退 PATH 上的 `dsh`。
 - **更新提示里写死 `--profile desktop`**：改为使用当前 profile。
-- `officialOnly` 设置项的说明补全（关掉后会计入第三方 token，但只有官方路由折算金额）。
+- `officialOnly` 与 `apiKeyEnv` 的设置说明补全（前者关掉后会计入第三方 token 但只有官方路由折算金额；
+  后者只在未登录账号时使用）。
+
+### 界面
+
+- **余额单独成块、数字放大到 23px**（原来是 11px 小字里跟在「更新于 …」后面）：
+  带边框/底色，`含赠送 ¥x` 作为次要信息，来源（账号 / API Key）用小徽标标注，
+  点一下即可余额 + 用量一起重新取数；未登录/查询失败时显示明确原因而不是空白。
 
 ### 工程
 
@@ -26,6 +39,9 @@
   `npm run setup` 不再依赖 PowerShell。
 - 新增回归测试 [tools/verify-generations.mjs](tools/verify-generations.mjs)：自造多帧 zstd 会话日志，
   覆盖六个代际组合与 provider 口径（旧代码下这 9 项会失败）。
+- [tools/smoke-host.mjs](tools/smoke-host.mjs) 增加余额回归：账号路径必须映射出
+  `total = 充值 + 赠送`，并把 `version/locale/timezoneOffsetSeconds` 传给官方服务；
+  没有账号、没有凭据时必须明确回退并给出原因。
 - 新增 CI [.github/workflows/test.yml](.github/workflows/test.yml)：ubuntu + windows 各跑一遍 `npm test`。
 - 去掉 `sliceDays` 里一行无用代码。
 
