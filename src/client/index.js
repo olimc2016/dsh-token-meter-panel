@@ -45,7 +45,7 @@ const zh = {
   'historyTitle': '历史（官方查询）',
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
-  'noBrowser': '未找到 Chrome/Edge 登录态（可选）',
+  'noBrowser': '未检测到 Chrome/Edge（可选）',
   'officialLoading': '正在获取官方数据…',
   'firstLoad': '首次加载，请稍等',
   'firstLoadHint': '（要读浏览器登录态并扫描本机会话日志，通常几秒）',
@@ -62,8 +62,8 @@ const zh = {
   'copyCmd': '复制更新命令',
   'copied': '已复制 ✓',
   'viewRelease': '发布说明',
-  'connectOfficial': '连接官方',
-  'connectHint': '可选：需在 Chrome/Edge 等 Chromium 浏览器里登录 platform.deepseek.com（Safari/Firefox 的登录态读不到）。余额与本地花费不需要这一步',
+  'connectOfficial': '连接',
+  'connectHint': '可选的对账数据：在 Chrome/Edge 里登录 platform.deepseek.com，登录态会自动读取（Safari/Firefox 不支持）。余额与本地花费不需要它',
   'localEstimate': '本地推算',
   'diffLabel': '差',
   'officialOff': '官方用量已关闭',
@@ -146,7 +146,7 @@ const en = {
   'historyTitle': 'History (official query)',
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
-  'noBrowser': 'no Chrome/Edge session found (optional)',
+  'noBrowser': 'no Chrome/Edge detected (optional)',
   'officialLoading': 'fetching official data…',
   'firstLoad': 'First load, please wait',
   'firstLoadHint': '(reading browser session and scanning local session logs — usually a few seconds)',
@@ -164,7 +164,7 @@ const en = {
   'copied': 'copied ✓',
   'viewRelease': 'release notes',
   'connectOfficial': 'Connect',
-  'connectHint': 'optional: requires a Chrome/Edge (Chromium) session at platform.deepseek.com — Safari/Firefox sessions are not readable. Balance and local cost do not need this',
+  'connectHint': 'Optional cross-check: sign in at platform.deepseek.com in Chrome/Edge — the session is read automatically (Safari/Firefox unsupported). Balance and local cost do not need it',
   'localEstimate': 'local estimate',
   'diffLabel': 'diff',
   'officialOff': 'Official usage is off',
@@ -840,21 +840,22 @@ function TokenMeterPanel(props) {
                 React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
               ]
               : [
-                React.createElement('span', { key: 'why' }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
+                // 正文只留一句短话；为什么需要它、支持哪些浏览器都放进 tooltip，别糊在面板上
+                React.createElement('span', { key: 'why', title: t('connectHint') }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
                   : off?.reason === 'disabled' ? t('officialOff')
                     : off?.reason === 'no-credential' ? t('notConnected')
                       : off?.reason === 'no-browser' ? t('noBrowser')
                         : (off?.error ?? t('balanceFailed'))} `),
-                // 「连接官方」只在真的可能连上时给（无 Chromium 浏览器时不给这个按钮，免得白跑一趟）
+                // 「连接」只在真的可能连上时给（没有 Chromium 系浏览器时不给，免得白跑一趟）
                 off?.reason === 'loading' || off?.reason === 'no-browser' ? null : React.createElement('span', {
                   key: 'go',
+                  title: t('connectHint'),
                   onClick: () => {
                     try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ }
                     refresh();
                   },
                   style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
                 }, t('connectOfficial')),
-                React.createElement('span', { key: 'hint', style: { marginLeft: 6, fontSize: 10.5 } }, t('connectHint')),
               ]);
           })(),
           (() => React.createElement('div', {

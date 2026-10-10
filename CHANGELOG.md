@@ -66,13 +66,12 @@
 
 ### 文案
 
-- **「官方用量」提示改为事实性说明**：原文案「首次会打开官方网页，未登录请先在页面里登录，
-  回来即自动生效」在机制上只对 Chromium 系浏览器成立（Safari/Firefox 的登录态读不到），
-  且余额与本地花费已经不需要这一步。现在写成
-  「可选：需在 Chrome/Edge 等 Chromium 浏览器里登录 platform.deepseek.com（Safari/Firefox 的登录态读不到）。
-  余额与本地花费不需要这一步」，状态也从「未连接」改为「未连接（可选）」。
-- 新增 `no-browser` 失败态：机器上没有任何可读的 Chromium 配置时，面板直说「未找到 Chrome/Edge 登录态（可选）」
-  并且**不再给出「连接官方」按钮**（避免让用户白跑一趟网页）。
+- **「官方用量」提示改成一句话 + tooltip**：原文案「首次会打开官方网页，未登录请先在页面里登录，
+  回来即自动生效」既冗长、又只对 Chromium 系浏览器成立（Safari/Firefox 的登录态读不到）。
+  现在面板正文只有 `官方用量：未连接（可选） 连接`，把「为什么需要、支持哪些浏览器、余额与本地花费
+  不需要它」全部放进 tooltip；状态文案也从「未连接」改为「未连接（可选）」。
+- 新增 `no-browser` 失败态：机器上没有任何可读的 Chromium 配置时显示「未检测到 Chrome/Edge（可选）」，
+  **不再给出「连接」按钮**（避免让用户白跑一趟网页），原因同样在 tooltip 里。
 - `package.json` 的 description / keywords、中英文 README 首屏、`docs/listing.md` 上架文案一并重写：
   把「兼容 DSH 0.2.x / 零外部依赖 / 账号登录也能看余额 / 峰谷计价」提到最前面，
   并附一张与 dsh-token-usage、dsh-token-meter、dsh-usage 的实测对比表（2026-10-10，DSH 0.2.0-rc.2）。
