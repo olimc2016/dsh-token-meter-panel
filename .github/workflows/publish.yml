@@ -1,4 +1,5 @@
 # 推 tag 即自动发布到 npm（Trusted Publishing / OIDC，无需任何 token）
+# 说明：npm 上以 dsh-token-mb 为发行名（dsh-token-meter-panel 的 npm 所有者账号暂不可访问）
 #
 # 首次使用前，需要在 npm 包设置里绑定一次 Trusted Publisher：
 #   https://www.npmjs.com/package/dsh-token-meter-panel/access
@@ -13,11 +14,10 @@ name: publish
 
 on:
   # 注意：npm 侧 Trusted Publisher 还没绑定，所以暂时**只允许手动触发**，避免推 tag 时出现红色失败。
-  # 绑定完成后（https://www.npmjs.com/package/dsh-token-meter-panel/access → Trusted Publisher），
-  # 把下面 push.tags 注释恢复，即可实现「推 tag 自动发版」。
-  # push:
-  #   tags:
-  #     - 'v*'
+  # 推 tag 自动发版（npm 侧需为对应包名绑定 Trusted Publisher）
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -41,5 +41,14 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Publish (with provenance)
+      # 短名包：npm 上以 dsh-token-mb 发布（同仓库同源码，npm run twin 生成）
+      - name: Publish dsh-token-mb (with provenance)
+        run: |
+          node tools/make-twin.mjs
+          cd dist/dsh-token-mb
+          npm publish --provenance --access public
+
+      # 主力包名：等 olimc2016 账号恢复、或把该账号加成维护者后即可发；现在失败不阻塞发版
+      - name: Publish dsh-token-meter-panel (best effort)
+        continue-on-error: true
         run: npm publish --provenance --access public
