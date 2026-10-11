@@ -72,6 +72,8 @@ const zh = {
   'colUsage': '用量',
   'colSubtotal': '小计',
   'todayTotal': '今日合计',
+  'tierOffShort': '空闲档',
+  'tierPeakShort': '高峰档',
   'rateFootnote': '单价：元/百万 token。空闲档 flash ¥0.02/¥1/¥4、v4-pro ¥0.15/¥4.5/¥13.5，高峰为其两倍。口径：API 官方价目表。',
   'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
   'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
@@ -194,6 +196,8 @@ const en = {
   'colUsage': 'Usage',
   'colSubtotal': 'Subtotal',
   'todayTotal': 'Today total',
+  'tierOffShort': 'Off-peak',
+  'tierPeakShort': 'Peak',
   'rateFootnote': 'Unit price: CNY per million tokens. Off-peak flash ¥0.02/¥1/¥4, v4-pro ¥0.15/¥4.5/¥13.5; peak is double. Source: official API price list.',
   'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
   'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
@@ -1157,19 +1161,19 @@ function TokenMeterPanel(props) {
           const num = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
           const line = { borderTop: `1px solid ${C.border1}` };
           const sumRow = (key, label, value, strong) => React.createElement('tr', { key }, [
-            td('l', label, { ...line, padding: '3px 4px', textAlign: 'right', color: strong ? C.label2 : C.label3, colSpan: 3, fontWeight: strong ? 700 : 400 }),
+            td('l', label, { ...line, padding: '3px 4px', textAlign: 'right', color: strong ? C.label2 : C.label3, colSpan: 3, fontWeight: strong ? 700 : 400, whiteSpace: 'nowrap' }),
             td('v', value, { ...line, ...num, padding: '3px 4px', fontWeight: strong ? 750 : 650, color: strong ? C.label : C.label2 }),
           ]);
           return React.createElement('table', {
             key: 'merge',
-            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 9, tableLayout: 'fixed' },
+            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 9 },
           }, [
             React.createElement('thead', { key: 'th' }, React.createElement('tr', null, [
               th('i', t('colItem'), 'left'), th('p', t('colPrice'), 'right'), th('u', t('colUsage'), 'right'), th('s', t('colSubtotal'), 'right'),
             ])),
             React.createElement('tbody', { key: 'tb' }, [
               ...rows.map((r) => React.createElement('tr', { key: r.k }, [
-                td('i', r.label, { ...line, padding: '3px 4px', color: C.label2 }),
+                td('i', r.label, { ...line, padding: '3px 4px', color: C.label2, whiteSpace: 'nowrap' }),
                 td('p', [
                   React.createElement('b', { key: 'a', style: { color: C.ok } }, `¥${r.now}`),
                   React.createElement('span', { key: 'b', style: { color: C.label3 } }, ` / ¥${r.high ?? '—'}`),
@@ -1177,8 +1181,8 @@ function TokenMeterPanel(props) {
                 td('u', fmtM(r.tokens), { ...line, ...num, padding: '3px 4px' }),
                 td('s', money((r.tokens / 1e6) * (r.now ?? 0)), { ...line, ...num, padding: '3px 4px', fontWeight: 650 }),
               ])),
-              D.tier ? sumRow('off', t('offpeak'), money(D.tier.offPeak?.cny ?? 0)) : null,
-              D.tier ? sumRow('pk', t('peak'), money(D.tier.peak?.cny ?? 0)) : null,
+              D.tier ? sumRow('off', t('tierOffShort'), money(D.tier.offPeak?.cny ?? 0)) : null,
+              D.tier ? sumRow('pk', t('tierPeakShort'), money(D.tier.peak?.cny ?? 0)) : null,
               sumRow('all', t('todayTotal'), money(D.cny), true),
             ].filter(Boolean)),
           ]);
