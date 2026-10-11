@@ -57,7 +57,11 @@ const zh = {
   'notConnected': '未连接（可选）',
   'totalSpent': '累计消费',
   'lowBalance': '余额偏低，低于',
-  'lowBalanceHint': '在插件设置里可改「余额低于该值提醒」（0 = 关闭）',
+  'lowBalanceHint': '点击直接改（写回 DSH 设置），0 = 关闭提醒',
+  'editBudgetHint': '点击直接改每日预算（写回 DSH 设置）',
+  'editLowHint': '点击修改',
+  'save': '保存',
+  'cancel': '取消',
   'rechargeHint': '建议充值',
   'windowToday': '今日',
   'window7': '近 7 天',
@@ -185,7 +189,11 @@ const en = {
   'notConnected': 'not connected (optional)',
   'totalSpent': 'Total spent',
   'lowBalance': 'Low balance, below',
-  'lowBalanceHint': 'Configurable in plugin settings (0 disables)',
+  'lowBalanceHint': 'Click to edit (writes back to DSH settings); 0 disables',
+  'editBudgetHint': 'Click to edit the daily budget',
+  'editLowHint': 'edit',
+  'save': 'Save',
+  'cancel': 'Cancel',
   'rechargeHint': 'top up',
   'windowToday': 'Today',
   'window7': 'Last 7d',
@@ -569,9 +577,26 @@ function TokenMeterPanel(props) {
   const { t } = props;
   // 默认看 30 天：和宿主 historyDays / 官方查询窗口一致，免得刚装好只看到 7 天以为没数据
   const [range, setRange] = React.useState(30);
+  // 面板内改设置（预算 / 低余额提醒阈值）：null | {field,label,value}
+  const [edit, setEdit] = React.useState(null);
   // 宿主建议的刷新间隔（来自设置 refreshSeconds），拿到后接管轮询
   const [intervalSec, setIntervalSec] = React.useState(60);
   const { status, data, error, at, refresh } = useSummary(intervalSec);
+  const saveSetting = async (field, raw) => {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) { setEdit((cur) => (cur ? { ...cur, error: '需要非负数字' } : cur)); return; }
+    try {
+      const res = await fetch(`${ROUTE_BASE}/settings`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ [field]: value }),
+      });
+      const out = await res.json();
+      if (!out?.ok) throw new Error(out?.error ?? `HTTP ${res.status}`);
+      setEdit(null);
+      refresh();
+    } catch (err) {
+      setEdit((cur) => (cur ? { ...cur, error: String(err?.message ?? err) } : cur));
+    }
+  };
   // 官方数据是后台补齐的：首屏等它时快速重试几次（1.5s 一次）；
   // 首次安装时本地扫描也可能只覆盖了窗口的一部分（partialScan）——同样继续重试：
   // 宿主那边未变动的文件会走增量缓存，所以每一轮都只补扫剩下的部分，几轮内把 30 天补齐。
@@ -992,13 +1017,44 @@ function TokenMeterPanel(props) {
         balLow
           ? React.createElement('div', {
             key: 'lowbal',
-            onClick: () => { try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ } },
+            onClick: () => setEdit({ field: 'lowBalanceAlert', label: t('lowBalance'), value: String(lowAlert) }),
             title: t('lowBalanceHint'),
             style: {
               flex: '1 1 100%', marginTop: 6, fontSize: 11, cursor: 'pointer', userSelect: 'none',
               color: balLowColor, opacity: 0.9,
             },
-          }, `⚠ ${t('lowBalance')} ¥${fmtMoney(lowAlert)} · ${t('rechargeHint')} ↗`)
+          }, `⚠ ${t('lowBalance')} ¥${fmtMoney(lowAlert)} · ${t('editLowHint')} ✎`)
+          : null,
+        edit
+          ? React.createElement('div', {
+            key: 'edit',
+            style: {
+              flex: '1 1 100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 8,
+              paddingTop: 8, borderTop: `1px solid ${C.border1}`, fontSize: 11.5,
+            },
+          }, [
+            React.createElement('span', { key: 'l', style: { color: C.label3 } }, `${edit.label} =`),
+            React.createElement('input', {
+              key: 'i', value: edit.value, autoFocus: true, inputMode: 'decimal',
+              onChange: (e) => setEdit((cur) => ({ ...cur, value: e.target.value, error: null })),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') saveSetting(edit.field, edit.value);
+                if (e.key === 'Escape') setEdit(null);
+              },
+              style: {
+                width: 76, padding: '2px 6px', fontSize: 12, fontVariantNumeric: 'tabular-nums',
+                borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.label,
+              },
+            }),
+            React.createElement('span', {
+              key: 's', onClick: () => saveSetting(edit.field, edit.value),
+              style: { cursor: 'pointer', color: C.brand, fontWeight: 650 },
+            }, t('save')),
+            React.createElement('span', {
+              key: 'c', onClick: () => setEdit(null), style: { cursor: 'pointer', color: C.label3 },
+            }, t('cancel')),
+            edit.error ? React.createElement('span', { key: 'e', style: { color: C.error } }, edit.error) : null,
+          ])
           : null,
         React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
@@ -1049,7 +1105,11 @@ function TokenMeterPanel(props) {
               key: 'head',
               style: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 11, marginBottom: 6 },
             }, [
-              React.createElement('span', { key: 'l', style: { color: C.label3 } }, `${t('budgetUsed')} ${money(budget)}`),
+              React.createElement('span', {
+                key: 'l', title: t('editBudgetHint'),
+                onClick: () => setEdit({ field: 'dailyBudget', label: t('budgetUsed'), value: String(budget) }),
+                style: { color: C.label3, cursor: 'pointer', textDecoration: 'underline dotted' },
+              }, `${t('budgetUsed')} ${money(budget)} ✎`),
               React.createElement('span', {
                 key: 'v',
                 style: { marginLeft: 'auto', color: over ? C.error : C.label2, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
