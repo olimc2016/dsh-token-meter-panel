@@ -699,7 +699,6 @@ function TokenMeterPanel(props) {
     const last30 = keysBack(30);
     const monthKeys = Object.keys(daySrc ?? {}).filter((k) => k.startsWith(today.slice(0, 7)));
     return [
-      { key: 'today', label: t('windowToday'), value: cnyOfKey(daySrc, today), hero: true },
       { key: 'd7', label: t('window7'), value: sumKeys(last30.slice(0, 7)) },
       { key: 'd30', label: t('window30'), value: sumKeys(last30) },
       { key: 'month', label: t('windowMonth'), value: sumKeys(monthKeys) },
@@ -921,7 +920,7 @@ function TokenMeterPanel(props) {
             flex: '1 1 100%', marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border1}`,
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px 12px',
           },
-        }, money4.map((m) => React.createElement('div', {
+        }, [...money4, ...(balCost ? [{ key: 'total', label: t('totalSpent'), value: Number(balCost) }] : [])].map((m) => React.createElement('div', {
           key: m.key,
           style: { display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 },
         }, [
@@ -973,23 +972,6 @@ function TokenMeterPanel(props) {
           React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
           ]),
         ]),
-        balCost
-          ? React.createElement('div', {
-            key: 'tc',
-            onClick: () => { balance.reload(); refresh(); },
-            title: `${t('totalSpent')} · ${balSource} · ${t('totalSpentHint')}`,
-            style: {
-              flex: '1 1 100%', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 8,
-              cursor: 'pointer', userSelect: 'none',
-            },
-          }, [
-            React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, t('totalSpent')),
-            React.createElement('span', {
-              key: 'v',
-              style: { marginLeft: 'auto', fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums', color: C.label2 },
-            }, `${balCostCur}${fmtMoney(balCost)}`),
-          ])
-          : null,
         React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
             const off = data.official;
@@ -998,17 +980,7 @@ function TokenMeterPanel(props) {
               key: 'official',
               style: { fontSize: 11, color: C.label3, marginBottom: 2, fontVariantNumeric: 'tabular-nums' },
             }, off?.ok
-              ? [
-                // 徽标化：接口地址/登录态细节进 tooltip，正文只留「账号登录态 · 187 次」
-                React.createElement('span', {
-                  key: 'badge',
-                  title: `platform.deepseek.com/api/v0/usage${off.ref ? ` · ${off.ref}` : ''} · ${off.auth === 'account' ? t('authAccount') : t('authBrowser')}`,
-                  style: {
-                    display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600,
-                    color: C.ok, border: `1px solid ${C.ok}`, borderRadius: 999, padding: '1px 7px',
-                  },
-                }, `${off.auth === 'account' ? t('authAccount') : t('authBrowser')} · ${off.requests ?? '—'} ${t('timesShort')}`),
-              ]
+              ? null
               : [
                 // 正文只留一句短话；为什么需要它、支持哪些浏览器都放进 tooltip，别糊在面板上
                 React.createElement('span', { key: 'why', title: t('connectHint') }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
