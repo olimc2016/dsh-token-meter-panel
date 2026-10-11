@@ -379,10 +379,11 @@ const SKINS = {
       boxShadow: '0 10px 32px rgba(0,0,0,.22), inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent)',
     },
     hero: {
-      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 15%, transparent)',
-      borderRadius: 18,
+      // 与 panel 完全同款：三栏必须同圆角同阴影，否则会"不在一个平面"
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 13%, transparent)',
+      borderRadius: 16,
       padding: '14px 16px',
-      background: 'linear-gradient(150deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent), transparent 62%), color-mix(in srgb, var(--dsw-alias-bg-layer-1) 52%, transparent)',
+      background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 50%, transparent)',
       backdropFilter: GLASS_BLUR,
       WebkitBackdropFilter: GLASS_BLUR,
       boxShadow: '0 14px 40px rgba(0,0,0,.24), inset 0 1px 0 color-mix(in srgb, #fff 24%, transparent)',
@@ -874,7 +875,8 @@ function TokenMeterPanel(props) {
         // 窄的时候自动换行（余额掉到下一行）—— 用 flex-wrap 而不是固定网格，
         // 否则卡片一窄，左边就会被右边那块 `auto` 宽度挤成一字一行。
         // 独占一整行：这样「今日消费」和「账户余额」能真正并排，下面两张副卡也各宽一倍
-        style: { ...S.hero, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
+        // 与第二、三栏用**同一个**卡片面：圆角/边框/背景/阴影都必须一致，否则三栏看着不在一个平面
+        style: { ...S.panel, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
       }, [
         React.createElement('div', { key: 'left', style: { flex: '1 1 220px', minWidth: 0 } }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
