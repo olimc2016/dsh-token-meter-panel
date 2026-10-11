@@ -76,8 +76,9 @@ const zh = {
   'colSubtotal': '小计',
   'todayTotal': '今日合计',
   'tierOffShort': '空闲档',
+  'byLocalTier': '本机日志分档（口径同本地扫描）',
   'tierPeakShort': '高峰档',
-  'rateFootnote': '单价：元/百万 token。空闲档 flash ¥0.02/¥1/¥4、v4-pro ¥0.15/¥4.5/¥13.5，高峰为其两倍。口径：API 官方价目表。',
+  'rateFootnote': '单价：元/百万 token（按 flash 档展示）。行小计 = 官方用量 × 当前档单价，四舍五入到分，与官方账单允许几分差异。',
   'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
   'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
   'noBrowser': '未检测到 Chrome/Edge（可选）',
@@ -203,8 +204,9 @@ const en = {
   'colSubtotal': 'Subtotal',
   'todayTotal': 'Today total',
   'tierOffShort': 'Off-peak',
+  'byLocalTier': 'Local-log tier split',
   'tierPeakShort': 'Peak',
-  'rateFootnote': 'Unit price: CNY per million tokens. Off-peak flash ¥0.02/¥1/¥4, v4-pro ¥0.15/¥4.5/¥13.5; peak is double. Source: official API price list.',
+  'rateFootnote': 'Unit price: CNY per million tokens (flash tier shown). Subtotal = official usage × current-tier price, rounded to cents; small differences vs the official bill are expected.',
   'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
   'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
   'noBrowser': 'no Chrome/Edge detected (optional)',
@@ -1177,13 +1179,17 @@ function TokenMeterPanel(props) {
                 td('u', fmtM(r.tokens), { ...line, ...num, padding: '3px 4px' }),
                 td('s', money((r.tokens / 1e6) * (r.now ?? 0)), { ...line, ...num, padding: '3px 4px', fontWeight: 650 }),
               ])),
-              D.tier ? sumRow('off', t('tierOffShort'), money(D.tier.offPeak?.cny ?? 0)) : null,
-              D.tier ? sumRow('pk', t('tierPeakShort'), money(D.tier.peak?.cny ?? 0)) : null,
               sumRow('all', t('todayTotal'), money(D.cny), true),
             ].filter(Boolean)),
           ]);
         })(),
-        React.createElement('div', { key: 'note', style: { fontSize: 10.5, marginTop: 8, lineHeight: 1.6 } }, t('rateFootnote')),
+        D.tier
+          ? React.createElement('div', {
+            key: 'tiernote',
+            style: { fontSize: 10.5, color: C.label3, marginTop: 6 },
+          }, `${t('byLocalTier')}：${t('tierOffShort')} ${money(D.tier.offPeak?.cny ?? 0)} · ${t('tierPeakShort')} ${money(D.tier.peak?.cny ?? 0)}`)
+          : null,
+        React.createElement('div', { key: 'note', style: { fontSize: 10.5, marginTop: 6, lineHeight: 1.6 } }, t('rateFootnote')),
       ]),
     ]),
 
