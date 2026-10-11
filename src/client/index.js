@@ -12,8 +12,18 @@ import React from 'react';
  * 样式：只用 DSH 自己的 --dsw-* 主题变量，因此在深浅色主题下都跟界面一致。
  */
 
-const SLOT_ID = 'tokenmeter';
-const ROUTE = '/token-meter-panel/summary';
+/**
+ * 包名在**构建期**注入（tools/build-client.mjs 的 define）。同一个仓库会以两个名字发布
+ * （dsh-token-meter-panel / dsh-token-mb），两个包必须用不同的侧栏 slot id 与路由前缀，
+ * 否则同时装进一个 profile 时浏览器侧的 slot / 路由会重复注册。
+ * 主力包保持历史的 slot id `tokenmeter`（不动用户已有的侧栏选择），孪生包用包名短名。
+ */
+const PKG_NAME = typeof __DSH_PLUGIN_NAME__ === 'string' ? __DSH_PLUGIN_NAME__ : 'dsh-token-meter-panel';
+const SHORT_NAME = PKG_NAME.replace(/^dsh-/, '');
+const SLOT_ID = SHORT_NAME === 'token-meter-panel' ? 'tokenmeter' : SHORT_NAME;
+const ROUTE_BASE = `/${SHORT_NAME}`;
+const LOCALE_NS = SHORT_NAME;
+const ROUTE = `${ROUTE_BASE}/summary`;
 
 /* ------------------------------------------------------------------ *
  * 文案
@@ -31,6 +41,10 @@ const zh = {
   'remain': '剩余',
   'balance': '账户余额',
   'checkBalance': '查询余额',
+  'balanceLoading': '查询中…',
+  'balanceAccount': '账号',
+  'balanceApiKey': 'API Key',
+  'inclGranted': '含赠送',
   'peakHourLabel': '峰值',
   'peakShort': '高峰',
   'offShort': '空闲',
@@ -38,9 +52,36 @@ const zh = {
   'officialLabel': '官方',
   'localShort': '本地日志',
   'yesterdayLabel': '昨天',
-  'historyTitle': '历史（官方查询）',
+  'historyTitle': '历史（按天）',
   'autoSession': '浏览器登录态',
-  'notConnected': '未连接',
+  'notConnected': '未连接（可选）',
+  'totalSpent': '累计消费',
+  'lowBalance': '余额偏低，低于',
+  'lowBalanceHint': '在插件设置里可改「余额低于该值提醒」（0 = 关闭）',
+  'rechargeHint': '建议充值',
+  'windowToday': '今日',
+  'window7': '近 7 天',
+  'window30': '近 30 天',
+  'windowMonth': '本月',
+  'authAccount': '账号登录态',
+  'authBrowser': '浏览器登录态',
+  'timesShort': '次',
+  'totalTokens': '总 token',
+  'perCall': '单次花费',
+  'perCallHint': '今日消费 ÷ 调用次数，单位：元/次',
+  'composeTitle': '总 token 构成',
+  'colItem': '项目',
+  'colPrice': '单价 现/峰',
+  'colUsage': '用量',
+  'colSubtotal': '小计',
+  'todayTotal': '今日合计',
+  'tierOffShort': '空闲档',
+  'byLocalTier': '本机日志分档（口径同本地扫描）',
+  'tierPeakShort': '高峰档',
+  'rateFootnote': '单价：元/百万 token（按 flash 档展示）。行小计 = 官方用量 × 当前档单价，四舍五入到分，与官方账单允许几分差异。',
+  'totalSpentHint': '账号开通以来的官方累计消费（走账号授权，不需要网页登录）',
+  'notConnectedChrome': '未连接 · 需登录 platform.deepseek.com',
+  'noBrowser': '未检测到 Chrome/Edge（可选）',
   'officialLoading': '正在获取官方数据…',
   'firstLoad': '首次加载，请稍等',
   'firstLoadHint': '（要读浏览器登录态并扫描本机会话日志，通常几秒）',
@@ -57,8 +98,8 @@ const zh = {
   'copyCmd': '复制更新命令',
   'copied': '已复制 ✓',
   'viewRelease': '发布说明',
-  'connectOfficial': '连接官方',
-  'connectHint': '首次会打开官方网页，未登录请先在页面里登录，回来即自动生效',
+  'connectOfficial': '连接',
+  'connectHint': '官方用量是可选的对账数据：在 Chrome/Edge 或 DSH 内置浏览器里登录 platform.deepseek.com 后自动读取（Safari/Firefox 读不到，macOS 沙盒限制）。余额与本地花费不需要它',
   'localEstimate': '本地推算',
   'diffLabel': '差',
   'officialOff': '官方用量已关闭',
@@ -111,6 +152,7 @@ const zh = {
   'source': '数据源',
   'updated': '更新于',
   'partial': '当前会话仍在写入，今日数字是下界',
+  'scanning': '正在补扫历史…',
   'rateLine': '计费口径',
 };
 
@@ -127,6 +169,10 @@ const en = {
   'remain': 'left',
   'balance': 'Balance',
   'checkBalance': 'Check balance',
+  'balanceLoading': 'loading…',
+  'balanceAccount': 'account',
+  'balanceApiKey': 'API Key',
+  'inclGranted': 'incl. bonus',
   'peakHourLabel': 'peak',
   'peakShort': 'Peak',
   'offShort': 'Off-peak',
@@ -134,9 +180,36 @@ const en = {
   'officialLabel': 'Official',
   'localShort': 'local log',
   'yesterdayLabel': 'yesterday',
-  'historyTitle': 'History (official query)',
+  'historyTitle': 'History (daily)',
   'autoSession': 'browser session',
-  'notConnected': 'not connected',
+  'notConnected': 'not connected (optional)',
+  'totalSpent': 'Total spent',
+  'lowBalance': 'Low balance, below',
+  'lowBalanceHint': 'Configurable in plugin settings (0 disables)',
+  'rechargeHint': 'top up',
+  'windowToday': 'Today',
+  'window7': 'Last 7d',
+  'window30': 'Last 30d',
+  'windowMonth': 'This month',
+  'authAccount': 'account session',
+  'authBrowser': 'browser session',
+  'timesShort': 'calls',
+  'totalTokens': 'Total tokens',
+  'perCall': 'Per call',
+  'perCallHint': "today's cost ÷ calls (CNY per call)",
+  'composeTitle': 'Token mix',
+  'colItem': 'Item',
+  'colPrice': 'Price',
+  'colUsage': 'Usage',
+  'colSubtotal': 'Subtotal',
+  'todayTotal': 'Today total',
+  'tierOffShort': 'Off-peak',
+  'byLocalTier': 'Local-log tier split',
+  'tierPeakShort': 'Peak',
+  'rateFootnote': 'Unit price: CNY per million tokens (flash tier shown). Subtotal = official usage × current-tier price, rounded to cents; small differences vs the official bill are expected.',
+  'totalSpentHint': 'official lifetime spend on this account (account grant, no web sign-in needed)',
+  'notConnectedChrome': 'not connected · sign in at platform.deepseek.com',
+  'noBrowser': 'no Chrome/Edge detected (optional)',
   'officialLoading': 'fetching official data…',
   'firstLoad': 'First load, please wait',
   'firstLoadHint': '(reading browser session and scanning local session logs — usually a few seconds)',
@@ -154,7 +227,7 @@ const en = {
   'copied': 'copied ✓',
   'viewRelease': 'release notes',
   'connectOfficial': 'Connect',
-  'connectHint': 'opens the official page; sign in there first, then come back',
+  'connectHint': 'Optional cross-check: sign in at platform.deepseek.com in Chrome/Edge — the session is read automatically (Safari/Firefox unsupported). Balance and local cost do not need it',
   'localEstimate': 'local estimate',
   'diffLabel': 'diff',
   'officialOff': 'Official usage is off',
@@ -207,6 +280,7 @@ const en = {
   'source': 'Source',
   'updated': 'Updated',
   'partial': 'This session is still appending; today is a lower bound',
+  'scanning': 'backfilling history…',
   'rateLine': 'Pricing',
 };
 
@@ -235,6 +309,20 @@ const hhmm = (ms) => {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 };
 const clock = (ms) => new Date(ms).toTimeString().slice(0, 8);
+
+/**
+ * 金额显示：官方平台给的是 16 位小数的十进制字符串（如 91.2898273800000000），
+ * 原样贴出来没法看。按量级收敛到 2/4/6 位，极小金额不四舍五入成 0.00。
+ * 原始字符串仍可通过 tooltip 看到。
+ */
+function fmtMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? '—');
+  if (n === 0) return '0.00';
+  const abs = Math.abs(n);
+  const digits = abs >= 0.01 ? 2 : abs >= 0.0001 ? 4 : 6;
+  return n.toFixed(digits);
+}
 
 const C = {
   // 三色（方案 B：青绿 / 琥珀 / 靛蓝）—— 色相 165°/35°/245°，两两间隔 ≥80°，
@@ -291,10 +379,11 @@ const SKINS = {
       boxShadow: '0 10px 32px rgba(0,0,0,.22), inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent)',
     },
     hero: {
-      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 15%, transparent)',
-      borderRadius: 18,
+      // 与 panel 完全同款：三栏必须同圆角同阴影，否则会"不在一个平面"
+      border: '1px solid color-mix(in srgb, var(--dsw-alias-label-primary) 13%, transparent)',
+      borderRadius: 16,
       padding: '14px 16px',
-      background: 'linear-gradient(150deg, color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent), transparent 62%), color-mix(in srgb, var(--dsw-alias-bg-layer-1) 52%, transparent)',
+      background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1) 50%, transparent)',
       backdropFilter: GLASS_BLUR,
       WebkitBackdropFilter: GLASS_BLUR,
       boxShadow: '0 14px 40px rgba(0,0,0,.24), inset 0 1px 0 color-mix(in srgb, #fff 24%, transparent)',
@@ -348,6 +437,31 @@ function Stat({ label, value, unit, color, extra, t, surface }) {
   ]);
 }
 
+/** 小格子：标签 + 数值（第二栏「均值三连」用） */
+function MiniStat({ label, value, hint }) {
+  return React.createElement('div', {
+    title: hint,
+    style: {
+      border: `1px solid ${C.border1}`, borderRadius: 9, padding: '7px 9px',
+      background: 'var(--dsw-alias-bg-layer-1, rgba(128,128,128,.05))',
+    },
+  }, [
+    React.createElement('div', { key: 't', style: { fontSize: 11, color: C.label3 } }, label),
+    React.createElement('div', {
+      key: 'v',
+      style: { fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums', marginTop: 1 },
+    }, value),
+  ]);
+}
+
+/** 图例小圆点 + 文案（构成条用） */
+function LegendDot({ color, text }) {
+  return React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } }, [
+    React.createElement('i', { key: 'i', style: { width: 8, height: 8, borderRadius: 3, background: color, display: 'inline-block' } }),
+    React.createElement('span', { key: 't' }, text),
+  ]);
+}
+
 /** 侧栏入口图标：仪表盘 + 硬币（自绘，不依赖 primitives） */
 function MeterIcon({ size = 16, active }) {
   return React.createElement('svg', {
@@ -379,8 +493,10 @@ function useSummary(intervalSec) {
 
   React.useEffect(() => {
     let alive = true;
-    // 首次强制重算（刷新缓存），之后走宿主的 5s TTL 缓存
-    const url = first.current ? `${ROUTE}?refresh=1` : ROUTE;
+    // 首次、以及「上一轮只扫了窗口的一部分」时强制重算：宿主那边未变动的文件走增量缓存，
+    // 所以每一轮只补扫剩下的部分，几轮内把整个统计窗口补齐；扫完之后回到 5s TTL 缓存。
+    const force = first.current || lastSummary?.data?.partialScan === true;
+    const url = force ? `${ROUTE}?refresh=1` : ROUTE;
     first.current = false;
     fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then(async (response) => {
@@ -409,21 +525,24 @@ function useSummary(intervalSec) {
   return { ...state, refresh };
 }
 
-function useBalance(enabled, refreshKey) {
+function useBalance(enabled) {
   const [state, setState] = React.useState({ status: 'idle', data: null });
-  const asked = React.useRef(false);
+  const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
-    if (!enabled || asked.current) return undefined;
-    asked.current = true;
+    if (!enabled) return undefined;
     let alive = true;
-    setState({ status: 'loading', data: null });
-    fetch('/token-meter-panel/balance', { cache: 'no-store', credentials: 'same-origin' })
+    // 已经拿到过数字就保留旧值刷新，避免每次轮询把余额闪成「查询中」
+    setState((prev) => ({ status: prev.data ? 'ready' : 'loading', data: prev.data }));
+    const locale = (typeof navigator !== 'undefined' && navigator.language) || 'zh-CN';
+    // tick>0 = 用户手动刷新（宿主会跳过 60s 缓存重新取数）
+    const url = `${ROUTE_BASE}/balance?locale=${encodeURIComponent(locale)}${tick > 0 ? '&refresh=1' : ''}`;
+    fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then((r) => r.json())
       .then((body) => { if (alive) setState({ status: 'ready', data: body?.data ?? null }); })
       .catch(() => { if (alive) setState({ status: 'failed', data: null }); });
     return () => { alive = false; };
-  }, [enabled, refreshKey]);
-  return state;
+  }, [enabled, tick]);
+  return { ...state, reload: () => setTick((n) => n + 1) };
 }
 
 /**
@@ -448,20 +567,23 @@ function useLiveUsage(props) {
  * ------------------------------------------------------------------ */
 function TokenMeterPanel(props) {
   const { t } = props;
-  const [range, setRange] = React.useState(7);
+  // 默认看 30 天：和宿主 historyDays / 官方查询窗口一致，免得刚装好只看到 7 天以为没数据
+  const [range, setRange] = React.useState(30);
   // 宿主建议的刷新间隔（来自设置 refreshSeconds），拿到后接管轮询
   const [intervalSec, setIntervalSec] = React.useState(60);
   const { status, data, error, at, refresh } = useSummary(intervalSec);
-  // 官方数据是后台补齐的：首屏等它时快速重试几次（1.2s 一次，最多 8 次），
-  // 这样既不阻塞首屏，也不会让用户干等到下一个 60s 轮询
+  // 官方数据是后台补齐的：首屏等它时快速重试几次（1.5s 一次）；
+  // 首次安装时本地扫描也可能只覆盖了窗口的一部分（partialScan）——同样继续重试：
+  // 宿主那边未变动的文件会走增量缓存，所以每一轮都只补扫剩下的部分，几轮内把 30 天补齐。
   const officialLoading = data?.official?.reason === 'loading';
+  const needsMore = officialLoading || data?.partialScan === true;
   const [officialTries, setOfficialTries] = React.useState(0);
   React.useEffect(() => {
-    if (!officialLoading) { if (officialTries) setOfficialTries(0); return undefined; }
-    if (officialTries >= 25) return undefined;
+    if (!needsMore) { if (officialTries) setOfficialTries(0); return undefined; }
+    if (officialTries >= 40) return undefined;
     const id = setTimeout(() => { setOfficialTries((n) => n + 1); refresh(); }, 1500);
     return () => clearTimeout(id);
-  }, [officialLoading, officialTries, refresh]);
+  }, [needsMore, officialTries, refresh]);
 
   React.useEffect(() => {
     const sec = data?.config?.refreshSeconds;
@@ -470,7 +592,7 @@ function TokenMeterPanel(props) {
 
   // 当前会话实时用量（官方 tokenUsage 投影；面板在 root scope，取不到时为 undefined）
   const live = useLiveUsage(props);
-  const balance = useBalance(Boolean(data?.config?.showBalance), data?.generatedAt);
+  const balance = useBalance(Boolean(data?.config?.showBalance));
 
   // 0.2：计费明细可折叠（默认收起，主区只留两个大数）；会话明细默认只列 5 行
   const [showRates, setShowRates] = React.useState(false);
@@ -564,9 +686,33 @@ function TokenMeterPanel(props) {
   const actual = cHit + cMiss + cOut || D.cny || 0;
 
   // 历史（官方查询数据）：最近 14 天，直接取自官方用量接口，不做任何本地推算
-  const historyDays = Object.keys(days).sort().reverse().slice(0, 14)
+  const historyDays = Object.keys(days).sort().reverse().slice(0, 30)
     .map((k) => ({ date: k, ...(days[k] ?? {}) }))
     .filter((d) => (d.cny ?? 0) > 0 || (d.calls ?? 0) > 0);
+
+  /**
+   * 四个窗口的金额：今日 / 近 7 天 / 近 30 天 / 本月。
+   * 数据源与主数字一致：官方用量可用时用官方按天数据（账号级、免登录），否则用本地日志聚合。
+   * 官方 days 的值可能是裸金额，本地 days 是 { cny, ... } —— 两种形状都兼容。
+   */
+  const daySrc = (data.meterSource === 'official' && data.official?.ok && data.official.days
+    && Object.keys(data.official.days).length) ? data.official.days : days;
+  const cnyOfKey = (m, k) => {
+    const v = m?.[k];
+    if (v === null || v === undefined) return 0;
+    return Number(typeof v === 'object' ? (v.cny ?? 0) : v) || 0;
+  };
+  const keysBack = (n) => Array.from({ length: n }, (_, i) => new Date(Date.now() - i * 86400000 + 8 * 3600e3).toISOString().slice(0, 10));
+  const sumKeys = (keys) => keys.reduce((acc, k) => acc + cnyOfKey(daySrc, k), 0);
+  const money4 = (() => {
+    const last30 = keysBack(30);
+    const monthKeys = Object.keys(daySrc ?? {}).filter((k) => k.startsWith(today.slice(0, 7)));
+    return [
+      { key: 'd7', label: t('window7'), value: sumKeys(last30.slice(0, 7)) },
+      { key: 'd30', label: t('window30'), value: sumKeys(last30) },
+      { key: 'month', label: t('windowMonth'), value: sumKeys(monthKeys) },
+    ];
+  })();
 
   const budget = Number(data.config?.dailyBudget) || 0;
   const usedPct = budget > 0 ? pct(D.cny, budget) : 0;
@@ -575,11 +721,31 @@ function TokenMeterPanel(props) {
   const warn = budget > 0 && !over && usedPct >= alertPct;
   const delta = prev && prev.cny > 0 ? ((D.cny - prev.cny) / prev.cny) * 100 : null;
 
-  // 头部左上角：更新时间 + 账户余额（余额查询默认关闭，关着时明确写「未开启」而不是留空）
-  const balInfo = balance.data?.ok ? balance.data.balance_infos?.[0] : null;
-  const balText = data.config?.showBalance
-    ? (balInfo ? `¥${balInfo.total_balance}` : t('balanceFailed'))
-    : t('notEnabled');
+  // 余额：桌面端账号登录时宿主走官方账号服务，否则回退 API Key；
+  // 两种来源都归一成 balance_infos，这里只认第一个钱包（宿主保证 CNY 优先）。
+  const balData = balance.data;
+  const balInfo = balData?.ok ? balData.balance_infos?.[0] : null;
+  const balCur = balInfo?.currency === 'USD' ? '$' : '¥';
+  const balGranted = balInfo && Number(balInfo.granted_balance) > 0 ? String(balInfo.granted_balance) : null;
+  // 低余额提醒：低于设置阈值（默认 20 元）时总额转淡红 + 提示充值；0 = 关闭
+  const lowAlert = Number(data.config?.lowBalanceAlert) || 0;
+  const balLow = Boolean(balInfo) && lowAlert > 0 && Number(balInfo.total_balance ?? 0) < lowAlert;
+  const balLowColor = 'var(--dsw-alias-state-error-primary, #f85149)';
+  // 官方账号的累计消费（/api/v0/users/get_user_summary 的 total_costs）；API Key 路径没有这项
+  const balCostRow = (() => {
+    const rows = balData?.total_costs;
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return rows.find((row) => row?.currency === balInfo?.currency) ?? rows[0];
+  })();
+  const balCost = balCostRow && Number(balCostRow.amount) > 0 ? balCostRow.amount : null;
+  const balCostCur = balCostRow?.currency === 'USD' ? '$' : '¥';
+  const balSource = balData?.source === 'account' ? t('balanceAccount')
+    : balData?.source === 'apikey' ? t('balanceApiKey') : '';
+  const balText = !data.config?.showBalance
+    ? t('notEnabled')
+    : balInfo ? `${balCur}${balInfo.total_balance}`
+      : balance.status === 'loading' ? t('balanceLoading')
+        : (balData?.reason === 'disabled' ? t('notEnabled') : (balData?.error ?? t('balanceFailed')));
 
   // 主数字口径：宿主已按官方用量接口给出天/时数据（meterSource === 'official'）
   const official = data.official;
@@ -701,12 +867,18 @@ function TokenMeterPanel(props) {
     /* 主指标 */
     React.createElement('div', {
       key: 'hero',
-      style: { display: 'grid', gridTemplateColumns: 'minmax(250px, 1.05fr) minmax(300px, 1.15fr) minmax(230px, 0.9fr)', gap: 12 },
+      style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 },
     }, [
       React.createElement('div', {
         key: 'spend',
-        style: S.hero,
+        // 今日消费与余额并排：宽的时候左右排（左=消费与说明，右=余额块），
+        // 窄的时候自动换行（余额掉到下一行）—— 用 flex-wrap 而不是固定网格，
+        // 否则卡片一窄，左边就会被右边那块 `auto` 宽度挤成一字一行。
+        // 独占一整行：这样「今日消费」和「账户余额」能真正并排，下面两张副卡也各宽一倍
+        // 与第二、三栏用**同一个**卡片面：圆角/边框/背景/阴影都必须一致，否则三栏看着不在一个平面
+        style: { ...S.panel, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
       }, [
+        React.createElement('div', { key: 'left', style: { flex: '1 1 220px', minWidth: 0 } }, [
         React.createElement('div', { key: 'l', style: { fontSize: 12, color: C.label2 } }, `${t('today')} · ${today}`),
         React.createElement('div', {
           key: 'n',
@@ -732,12 +904,12 @@ function TokenMeterPanel(props) {
             }, `${t('vsPrevOn')} ${deltaLabel} ${shownDelta >= 0 ? '+' : '−'}${Math.abs(shownDelta).toFixed(0)}%`)
             : null,
         ]),
-        /* 顺序按阅读习惯：先看到金额，再看更新时间和余额 */
+        /* 顺序按阅读习惯：先看到金额，再看更新时间/刷新；余额单独成块（见下） */
         React.createElement('div', {
           key: 'meta',
           style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11, color: C.label3, marginTop: 2, fontVariantNumeric: 'tabular-nums' },
         }, [
-          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('balance')} ${balText}`),
+          React.createElement('span', { key: 'mt' }, `${t('updated')} ${clock(at || data.generatedAt)}`),
           React.createElement('div', {
             key: 'rf',
             onClick: refresh,
@@ -754,7 +926,81 @@ function TokenMeterPanel(props) {
             t('refresh'),
           ]),
         ]),
-        React.createElement('div', { key: 'f', style: { fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
+        ]),
+        /* 四个窗口金额：今日 / 近 7 天 / 近 30 天 / 本月 —— 整行 2×2，跟在主数字后面 */
+        React.createElement('div', {
+          key: 'money4',
+          style: {
+            flex: '1 1 100%', marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border1}`,
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px 12px',
+          },
+        }, [...money4, ...(balCost ? [{ key: 'total', label: t('totalSpent'), value: Number(balCost) }] : [])].map((m) => React.createElement('div', {
+          key: m.key,
+          style: { display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 },
+        }, [
+          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, m.label),
+          React.createElement('span', {
+            key: 'v',
+            style: {
+              marginLeft: 'auto', fontSize: 15, fontWeight: m.hero ? 700 : 650,
+              color: m.hero ? C.label : C.label2, fontVariantNumeric: 'tabular-nums',
+            },
+          }, `¥${fmtMoney(m.value)}`),
+        ]))),
+        /* 账户余额：单独成块、数字字号 23px（原来是 11px 的小字里跟一截文字，太不显眼）。
+           点一下 = 余额和用量一起重新取数；tooltip 说明数据来自账号还是 API Key。 */
+        React.createElement('div', {
+          key: 'bal',
+          onClick: () => { balance.reload(); refresh(); },
+          title: `${t('balance')}${balSource ? ` · ${balSource}` : ''}${balData?.ref ? ` · ${balData.ref}` : ''}${balInfo ? ` · ${balCur}${balInfo.total_balance}` : ''}`,
+          style: {
+            flex: '1 1 100%', marginTop: 8, paddingTop: 8,
+            display: 'flex', alignItems: 'baseline', gap: 8,
+            borderTop: `1px solid ${C.border1}`,
+            cursor: 'pointer', userSelect: 'none',
+          },
+        }, [
+          React.createElement('span', { key: 'l', style: { fontSize: 11, color: C.label3, whiteSpace: 'nowrap' } }, t('balance')),
+          React.createElement('span', { key: 'v', style: { display: 'flex', alignItems: 'baseline', gap: 6, marginLeft: 'auto', minWidth: 0 } }, [
+          balInfo
+            ? React.createElement('span', {
+              key: 'n',
+              style: {
+                fontSize: 23, fontWeight: 750, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+                color: balLow ? balLowColor : undefined, opacity: balLow ? 0.88 : undefined,
+              },
+            }, [
+              React.createElement('span', { key: 'c', style: { fontSize: 13, fontWeight: 600, color: C.label2, marginRight: 1 } }, balCur),
+              fmtMoney(balInfo.total_balance),
+            ])
+            : React.createElement('span', {
+              key: 'e',
+              style: { fontSize: 12.5, fontWeight: 600, color: balData && balData.ok === false ? C.warn : C.label3 },
+            }, balText),
+          balGranted
+            ? React.createElement('span', { key: 'g', style: { fontSize: 10.5, color: C.label3 } }, `${t('inclGranted')} ${balCur}${fmtMoney(balGranted)}`)
+            : null,
+          balSource
+            ? React.createElement('span', {
+              key: 's',
+              style: { fontSize: 10, color: C.label3, padding: '1px 6px', borderRadius: 999, border: `1px solid ${C.border}` },
+            }, balSource)
+            : null,
+          React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
+          ]),
+        ]),
+        balLow
+          ? React.createElement('div', {
+            key: 'lowbal',
+            onClick: () => { try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ } },
+            title: t('lowBalanceHint'),
+            style: {
+              flex: '1 1 100%', marginTop: 6, fontSize: 11, cursor: 'pointer', userSelect: 'none',
+              color: balLowColor, opacity: 0.9,
+            },
+          }, `⚠ ${t('lowBalance')} ¥${fmtMoney(lowAlert)} · ${t('rechargeHint')} ↗`)
+          : null,
+        React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
             const off = data.official;
             const diff = off?.ok ? Math.abs(Number(off.cny) - actual) : null;
@@ -762,25 +1008,24 @@ function TokenMeterPanel(props) {
               key: 'official',
               style: { fontSize: 11, color: C.label3, marginBottom: 2, fontVariantNumeric: 'tabular-nums' },
             }, off?.ok
-              ? [
-                React.createElement('span', { key: 'src' }, `来源 platform.deepseek.com/api/v0/usage`),
-                off.auto ? React.createElement('span', { key: 'au', style: { marginLeft: 6, color: C.ok } }, `· ${t('autoSession')}`) : null,
-                React.createElement('span', { key: 'd', style: { marginLeft: 8 } }, `${t('calls')} ${off.requests ?? '—'}`),
-              ]
+              ? null
               : [
-                React.createElement('span', { key: 'why' }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
+                // 正文只留一句短话；为什么需要它、支持哪些浏览器都放进 tooltip，别糊在面板上
+                React.createElement('span', { key: 'why', title: t('connectHint') }, `${t('officialLabel')}：${off?.reason === 'loading' ? t('officialLoading')
                   : off?.reason === 'disabled' ? t('officialOff')
-                    : off?.reason === 'no-credential' ? t('notConnected')
-                      : (off?.error ?? t('balanceFailed'))} `),
-                off?.reason === 'loading' ? null : React.createElement('span', {
+                    : off?.reason === 'no-credential' ? t('notConnectedChrome')
+                      : off?.reason === 'no-browser' ? t('noBrowser')
+                        : (off?.error ?? t('balanceFailed'))} `),
+                // 「连接」只在真的可能连上时给（没有 Chromium 系浏览器时不给，免得白跑一趟）
+                off?.reason === 'loading' || off?.reason === 'no-browser' ? null : React.createElement('span', {
                   key: 'go',
+                  title: t('connectHint'),
                   onClick: () => {
                     try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ }
                     refresh();
                   },
                   style: { cursor: 'pointer', color: C.brand, userSelect: 'none' },
                 }, t('connectOfficial')),
-                React.createElement('span', { key: 'hint', style: { marginLeft: 6, fontSize: 10.5 } }, t('connectHint')),
               ]);
           })(),
           (() => React.createElement('div', {
@@ -800,97 +1045,92 @@ function TokenMeterPanel(props) {
         ]),
         budget > 0
           ? React.createElement('div', { key: 'p', style: { marginTop: 10 } }, [
-            React.createElement('div', { key: 'tw', style: { position: 'relative' } }, [
-              React.createElement('div', {
-                key: 'track',
-                style: { height: 8, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))', overflow: 'hidden' },
-              }, React.createElement('div', {
-                style: {
-                  height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`,
-                  background: over ? C.error : warn ? C.warn : C.brand,
-                  transition: 'width .3s ease',
-                },
-              })),
-              React.createElement('div', {
-                key: 'tick',
-                title: `${t('warnLine')} ${alertPct}%`,
-                style: {
-                  position: 'absolute', left: `${Math.min(alertPct, 100)}%`, top: -3, width: 2, height: 14,
-                  background: C.warn, opacity: 0.7, borderRadius: 2,
-                },
-              }),
+            React.createElement('div', {
+              key: 'head',
+              style: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 11, marginBottom: 6 },
+            }, [
+              React.createElement('span', { key: 'l', style: { color: C.label3 } }, `${t('budgetUsed')} ${money(budget)}`),
+              React.createElement('span', {
+                key: 'v',
+                style: { marginLeft: 'auto', color: over ? C.error : C.label2, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
+              }, `${t('used')} ${usedPct.toFixed(1)}% · ${t('remain')} ${money(Math.max(0, budget - D.cny))}`
+                + (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ⚠ ${t('warnLine')} ${alertPct}%` : '')),
             ]),
             React.createElement('div', {
-              key: 'txt',
-              style: { fontSize: 11, color: over ? C.error : C.label3, marginTop: 6 },
-            }, `${t('budgetUsed')} ${money(budget)} · ${t('used')} ${usedPct.toFixed(1)}% · ${t('remain')} ${money(Math.max(0, budget - D.cny))}` +
-              (over ? ` · ⚠ ${t('overBudget')}` : warn ? ` · ${usedPct >= alertPct ? '⚠' : ''}` : '')),
+              key: 'track',
+              style: { position: 'relative', height: 8, borderRadius: 99, background: 'var(--dsw-alias-border-l1, rgba(128,128,128,.2))' },
+            }, [
+              React.createElement('div', {
+                key: 'fill',
+                style: {
+                  height: '100%', width: `${Math.min(usedPct, 100).toFixed(1)}%`, borderRadius: 99,
+                  background: over ? C.error : warn ? C.warn : C.brand, transition: 'width .3s ease',
+                },
+              }),
+              alertPct > 0 && alertPct < 100 ? React.createElement('div', {
+                key: 'tick',
+                title: `${t('warnLine')} ${alertPct}%`,
+                style: { position: 'absolute', left: `${alertPct}%`, top: -2, width: 2, height: 12, background: C.warn, opacity: 0.65, borderRadius: 2 },
+              }) : null,
+            ]),
           ])
           : null,
       ]),
       React.createElement('div', {
         key: 'stats',
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
+        style: { ...S.panel, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
       }, [
         React.createElement(Stat, { key: '1', t, surface: S.stat, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
         React.createElement(Stat, {
           key: '2', t, surface: S.stat, label: t('hitRate'),
           value: D.hitRate === null || D.hitRate === undefined ? '—' : `${D.hitRate}`,
           unit: '%',
-          extra: ` · ${D.calls} ${t('calls')}`,
         }),
         React.createElement(Stat, { key: '3', t, surface: S.stat, label: t('missInput'), color: C.miss, value: fmt(D.miss) }),
         React.createElement(Stat, { key: '4', t, surface: S.stat, label: t('output'), color: C.out, value: fmt(D.out) }),
-        /* 金额公式：峰/谷分开算，再汇总（合计以官方金额为准） */
+        /* 均值三连：总 token / 调用 / 单次花费（元/次，金额小，4 位小数） */
         React.createElement('div', {
-          key: 'formula',
+          key: 'avg',
           style: {
-            gridColumn: '1 / -1', fontSize: 11.5, color: C.label3, lineHeight: 1.8,
+            gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
             borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2,
           },
+        }, [
+          React.createElement(MiniStat, { key: 'tt', label: t('totalTokens'), value: fmt(D.hit + D.miss + D.out) }),
+          React.createElement(MiniStat, { key: 'c', label: t('calls'), value: `${D.calls} ${t('timesShort')}` }),
+          React.createElement(MiniStat, {
+            key: 'pc', label: t('perCall'), hint: t('perCallHint'),
+            value: D.calls > 0 ? `¥${(D.cny / D.calls).toFixed(4)}` : '—',
+          }),
+        ]),
+        /* 总 token 构成：命中 / 未命中 / 输出 的占比条 */
+        React.createElement('div', {
+          key: 'compose',
+          style: { gridColumn: '1 / -1', borderTop: `1px solid ${C.border1}`, paddingTop: 8, marginTop: 2, fontSize: 11 },
         }, (() => {
-          const tier = D.tier;
-          // 费率字段名是 cacheHit / cacheMiss / output（不是 hit/miss/out）
-          const unitOf = (rateSet) => ({
-            hit: rateSet?.cacheHit ?? unit.hit,
-            miss: rateSet?.cacheMiss ?? unit.miss,
-            out: rateSet?.output ?? unit.out,
-          });
-          const row = (label, tk, prices, cny) => React.createElement('div', {
-            key: label,
-            style: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-          }, [
-            React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, label),
-            React.createElement('span', { key: 'm', style: { color: C.label, fontWeight: 650 } }, money(cny)),
-            React.createElement('span', { key: 'eq' }, '='),
-            React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(tk?.hit ?? 0)} × ¥${prices.hit}`),
-            React.createElement('span', { key: 'p1' }, '+'),
-            React.createElement('span', { key: 'm2' }, `${t('missInput')} ${fmtM(tk?.miss ?? 0)} × ¥${prices.miss}`),
-            React.createElement('span', { key: 'p2' }, '+'),
-            React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(tk?.out ?? 0)} × ¥${prices.out}`),
-          ]);
-          if (!tier || ((tier.peak?.calls ?? 0) === 0 && (tier.offPeak?.calls ?? 0) === 0)) {
-            // 没有分档数据（例如当天没有本地日志）时退回单行展示，并标明按当前时段单价
-            return [
-              React.createElement('div', { key: 'one', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
-                React.createElement('span', { key: 'n', style: { color: C.label, fontWeight: 650 } }, money(D.cny)),
-                React.createElement('span', { key: 'eq' }, '='),
-                React.createElement('span', { key: 'h' }, `${t('hitInput')} ${fmtM(D.hit)} × ¥${unit.hit}`),
-                React.createElement('span', { key: 'p1' }, '+'),
-                React.createElement('span', { key: 'p2' }, `${t('missInput')} ${fmtM(D.miss)} × ¥${unit.miss}`),
-                React.createElement('span', { key: 'p3' }, '+'),
-                React.createElement('span', { key: 'o' }, `${t('output')} ${fmtM(D.out)} × ¥${unit.out}`),
-                React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('byCurrentTier')}）`),
-              ]),
-            ];
-          }
+          const tot = D.hit + D.miss + D.out;
+          const seg = (n, color) => (tot > 0
+            ? React.createElement('i', { key: color, style: { flexGrow: Math.max(n, tot / 2000), background: color } })
+            : null);
           return [
-            row(t('peak'), tier.peak, unitOf(cfgRates?.peak?.['deepseek-flash']), tier.peak?.cny ?? 0),
-            row(t('offpeak'), tier.offPeak, unitOf(cfgRates?.offPeak?.['deepseek-flash']), tier.offPeak?.cny ?? 0),
-            React.createElement('div', { key: 'sum', style: { display: 'flex', gap: 6, marginTop: 2 } }, [
-              React.createElement('span', { key: 'l', style: { color: C.label2, fontWeight: 600, minWidth: 26 } }, t('sumLabel')),
-              React.createElement('span', { key: 'v', style: { color: C.label, fontWeight: 700 } }, money(D.cny)),
-              React.createElement('span', { key: 'note', style: { fontSize: 10.5 } }, `（${t('fromOfficial')}；${t('tierFromLocal')}）`),
+            React.createElement('div', { key: 'h', style: { display: 'flex', alignItems: 'baseline', gap: 8 } }, [
+              React.createElement('span', { key: 'l', style: { color: C.label3 } }, t('composeTitle')),
+              React.createElement('span', {
+                key: 'v',
+                style: { marginLeft: 'auto', color: C.label2, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
+              }, fmt(tot)),
+            ]),
+            React.createElement('div', {
+              key: 'bar',
+              style: { display: 'flex', height: 9, borderRadius: 99, overflow: 'hidden', marginTop: 7, background: C.border1 },
+            }, [seg(D.hit, C.hit), seg(D.miss, C.miss), seg(D.out, C.out)]),
+            React.createElement('div', {
+              key: 'lg',
+              style: { display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, color: C.label3, marginTop: 5 },
+            }, [
+              React.createElement(LegendDot, { key: 'h', color: C.hit, text: `${t('hitInput')} ${fmt(D.hit)}${tot > 0 ? ` · ${((100 * D.hit) / tot).toFixed(1)}%` : ''}` }),
+              React.createElement(LegendDot, { key: 'm', color: C.miss, text: `${t('missInput')} ${fmt(D.miss)}` }),
+              React.createElement(LegendDot, { key: 'o', color: C.out, text: `${t('output')} ${fmt(D.out)}` }),
             ]),
           ];
         })()),
@@ -907,10 +1147,51 @@ function TokenMeterPanel(props) {
             data.peakNow ? t('peak') : t('offpeak')),
         ]),
         React.createElement('div', { key: 'w', style: { fontSize: 10.5, lineHeight: 1.6 } }, t('peakWindow')),
-        React.createElement('div', { key: 'cap', style: { fontSize: 10.5, marginTop: 8 } },
-          `${t('unitPrices')}（${t('hitInput')} / ${t('missInput')} / ${t('output')}）`),
-        priceRow(t('peakShort'), cfgRates?.peak),
-        priceRow(t('offShort'), cfgRates?.offPeak),
+        (() => {
+          const peakSet = cfgRates?.peak?.['deepseek-flash'];
+          const rows = [
+            { k: 'hit', label: t('hitInput'), now: unit.hit, high: peakSet?.cacheHit, tokens: D.hit },
+            { k: 'miss', label: t('missInput'), now: unit.miss, high: peakSet?.cacheMiss, tokens: D.miss },
+            { k: 'out', label: t('output'), now: unit.out, high: peakSet?.output, tokens: D.out },
+          ];
+          const td = (key, text, style) => React.createElement('td', { key, style }, text);
+          const th = (key, text, align) => React.createElement('th', {
+            key, style: { textAlign: align, fontSize: 10.5, fontWeight: 600, color: C.label3, padding: '2px 4px' },
+          }, text);
+          const num = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+          const line = { borderTop: `1px solid ${C.border1}` };
+          const sumRow = (key, label, value, strong) => React.createElement('tr', { key }, [
+            td('l', label, { ...line, padding: '3px 4px', textAlign: 'right', color: strong ? C.label2 : C.label3, colSpan: 3, fontWeight: strong ? 700 : 400, whiteSpace: 'nowrap' }),
+            td('v', value, { ...line, ...num, padding: '3px 4px', fontWeight: strong ? 750 : 650, color: strong ? C.label : C.label2 }),
+          ]);
+          return React.createElement('table', {
+            key: 'merge',
+            style: { width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 9 },
+          }, [
+            React.createElement('thead', { key: 'th' }, React.createElement('tr', null, [
+              th('i', t('colItem'), 'left'), th('p', t('colPrice'), 'right'), th('u', t('colUsage'), 'right'), th('s', t('colSubtotal'), 'right'),
+            ])),
+            React.createElement('tbody', { key: 'tb' }, [
+              ...rows.map((r) => React.createElement('tr', { key: r.k }, [
+                td('i', r.label, { ...line, padding: '3px 4px', color: C.label2, whiteSpace: 'nowrap' }),
+                td('p', [
+                  React.createElement('b', { key: 'a', style: { color: C.ok } }, `¥${r.now}`),
+                  React.createElement('span', { key: 'b', style: { color: C.label3 } }, ` / ¥${r.high ?? '—'}`),
+                ], { ...line, ...num, padding: '3px 4px' }),
+                td('u', fmtM(r.tokens), { ...line, ...num, padding: '3px 4px' }),
+                td('s', money((r.tokens / 1e6) * (r.now ?? 0)), { ...line, ...num, padding: '3px 4px', fontWeight: 650 }),
+              ])),
+              sumRow('all', t('todayTotal'), money(D.cny), true),
+            ].filter(Boolean)),
+          ]);
+        })(),
+        D.tier
+          ? React.createElement('div', {
+            key: 'tiernote',
+            style: { fontSize: 10.5, color: C.label3, marginTop: 6 },
+          }, `${t('byLocalTier')}：${t('tierOffShort')} ${money(D.tier.offPeak?.cny ?? 0)} · ${t('tierPeakShort')} ${money(D.tier.peak?.cny ?? 0)}`)
+          : null,
+        React.createElement('div', { key: 'note', style: { fontSize: 10.5, marginTop: 6, lineHeight: 1.6 } }, t('rateFootnote')),
       ]),
     ]),
 
@@ -1027,7 +1308,7 @@ function TokenMeterPanel(props) {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 9.5, fontWeight: 700, color: '#04070d', fontVariantNumeric: 'tabular-nums',
                 },
-              }, h >= 34 && entry.hitRate != null && entry.hitRate > 0 ? `${entry.hitRate}%` : null),
+              }, null),
             ])
             : React.createElement('div', {
               key: 'z',
@@ -1046,7 +1327,7 @@ function TokenMeterPanel(props) {
           key: 'range',
           style: { flex: 1, textAlign: 'center', fontSize: 10, color: C.label3, fontVariantNumeric: 'tabular-nums' },
         }, `${trend_[0].key.slice(5)} → ${trend_[trend_.length - 1].key.slice(5)}`)]
-        : trend_.map(({ key, entry }) => {
+        : trend_.map(({ key, entry }, index) => {
           const total = entry ? entry.hit + entry.miss + entry.out : 0;
           const isToday = key === today;
           return React.createElement('div', {
@@ -1058,7 +1339,7 @@ function TokenMeterPanel(props) {
               fontWeight: isToday ? 700 : 400,
               maxWidth: trend_.length <= 4 ? 78 : 'none',
             },
-          }, isToday ? t('today') : key.slice(5));
+          }, isToday ? t('today') : (index % 3 === 0 ? key.slice(5) : ''));
         })),
 
       /* 分时 */
@@ -1123,15 +1404,17 @@ function TokenMeterPanel(props) {
       ]),
     ]),
 
-    /* 历史（官方查询） */
-    meterOfficial && historyDays.length
+    /* 历史（官方查询；没连官方时用本地日志，口径以标注为准） */
+    historyDays.length
       ? React.createElement('div', { key: 'hist', style: S.card }, [
         React.createElement('div', {
           key: 'h',
           style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: C.label3 },
         }, [
           React.createElement('span', { key: 't', style: { fontSize: 12.5, fontWeight: 650, color: C.label2 } }, t('historyTitle')),
-          React.createElement('span', { key: 's' }, `platform.deepseek.com/api/v0/usage · ${historyDays.length} 天`),
+          React.createElement('span', { key: 's' }, meterOfficial
+            ? `platform.deepseek.com/api/v0/usage · ${historyDays.length} 天`
+            : `${t('localShort')} · ${historyDays.length} 天`),
         ]),
         React.createElement('table', { key: 'tb', style: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginTop: 8 } }, [
           React.createElement('thead', { key: 'th' }, React.createElement('tr', null,
@@ -1308,15 +1591,16 @@ function TokenMeterPanel(props) {
       key: 'foot',
       style: { marginTop: 12, fontSize: 11, color: C.label3, lineHeight: 1.8 },
     }, [
-      React.createElement('div', { key: 'a' }, `${t('source')}：${data.sessionsRoot} · ${data.filesScanned} 个会话文件 · 扫描 ${data.elapsedMs}ms`),
-      React.createElement('div', { key: 'b' }, `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}`),
-      React.createElement('div', { key: 'c' }, `${t('rateLine')}：${data.pricing?.source} （采集于 ${data.pricing?.fetchedAt}）`),
+      React.createElement('div', { key: 'ab' },
+        `${t('updated')} ${clock(at || data.generatedAt)} · ${t('partial')}${data.partialScan ? ` · ${t('scanning')}` : ''}`
+        + ` · ${data.filesScanned} 个会话文件${data.filesReused > 0 ? `（复用 ${data.filesReused}）` : ''} · 扫描 ${data.elapsedMs}ms`
+        + (data.filesOutsideWindow > 0 ? ` · 窗口外 ${data.filesOutsideWindow}` : '')),
       /* 版本号 + 开源协议 + 更新提示 */
       React.createElement('div', {
         key: 'ver',
         style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 },
       }, [
-        React.createElement('span', { key: 'n' }, `${data.plugin?.name ?? 'dsh-token-meter-panel'} v${data.plugin?.version ?? '?'}`),
+        React.createElement('span', { key: 'n' }, `${data.plugin?.name ?? PKG_NAME} v${data.plugin?.version ?? '?'}`),
         React.createElement('span', { key: 's1' }, '·'),
         React.createElement('a', {
           key: 'lic',
@@ -1370,7 +1654,7 @@ function TokenMeterPanel(props) {
 export const inject = ['slots', 'locale'];
 
 export function apply(ctx) {
-  ctx.effect(() => ctx.locale.register('token-meter-panel', { zh, en }), 'token-meter-panel: dictionaries');
+  ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), `${LOCALE_NS}: dictionaries`);
 
   // 侧栏入口（id 必须与 main 面板的 key 同名，sidebar 用 id 去选中面板）
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
@@ -1378,13 +1662,13 @@ export function apply(ctx) {
     id: SLOT_ID,
     order: 90,
     label: () => 'Token',
-    locale: 'token-meter-panel',
+    locale: LOCALE_NS,
   }, (props) => React.createElement(MeterIcon, { size: props?.size ?? 16, active: props?.active })));
 
   // 中栏独立面板
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: SLOT_ID,
-    locale: 'token-meter-panel',
+    locale: LOCALE_NS,
   }, TokenMeterPanel));
 }

@@ -1,7 +1,8 @@
 /** 自检：摘要聚合 + 计费 + 时区 + 与既有数字对照 */
-import { aggregate, costOf, isPeakHour, dayKeyOf, PRICE_TIERS } from '../src/core.mjs';
+import { aggregate, costOf, isPeakHour, dayKeyOf, PRICE_TIERS, OFFICIAL_PROVIDERS } from '../src/core.mjs';
+import { sessionsRoot } from './paths.mjs';
 
-const ROOT = process.env.DSH_SESSIONS || 'C:/Users/oli20/.dsh/sessions';
+const ROOT = sessionsRoot();
 const t0 = Date.now();
 const data = aggregate(ROOT);
 console.log(`files=${data.filesScanned} skippedStale=${data.filesSkippedAsStale.length} unreadable=${data.unreadableFiles} calls=${data.calls} unpriced=${data.unpricedCalls} in ${Date.now() - t0}ms`);
@@ -14,7 +15,11 @@ const tot = Object.values(data.days).reduce((a, e) => ({
 }), { calls: 0, miss: 0, hit: 0, out: 0, cny: 0 });
 console.log(`TOTAL calls=${tot.calls} miss=${tot.miss} hit=${tot.hit} out=${tot.out} CNY=${tot.cny.toFixed(3)}`);
 console.log('\n-- providers --');
-for (const [p, v] of Object.entries(data.providers)) console.log(`  ${p}: calls=${v.calls} tokens=${v.tokens} CNY=${v.cny.toFixed(3)}`);
+console.log(`  （计费口径：${OFFICIAL_PROVIDERS.join(' / ')}，其他 provider 只记 token）`);
+for (const [p, v] of Object.entries(data.providers)) {
+  const billed = OFFICIAL_PROVIDERS.includes(p) ? 'billed' : 'tokens-only (officialOnly=false 才会出现)';
+  console.log(`  ${p}: calls=${v.calls} tokens=${v.tokens} CNY=${v.cny.toFixed(3)} [${billed}]`);
+}
 console.log('\n-- models --');
 for (const [m, v] of Object.entries(data.models)) console.log(`  ${m}: calls=${v.calls} CNY=${v.cny.toFixed(3)} rate=${v.hitRate}%`);
 

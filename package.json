@@ -1,7 +1,7 @@
 {
     "name":  "dsh-token-meter-panel",
-    "version":  "0.6.4",
-    "description":  "DSH Token 用量面板（社区插件，非官方）：今日/近期 token 消耗与花费、成本构成、按会话明细、预算告警。Token usage \u0026 cost panel for DeepSeek Harness (community plugin, unofficial).",
+    "version":  "0.6.5",
+    "description":  "DSH Token 用量 / 花费 / 余额面板（社区插件，非官方）：兼容 DSH 0.2.x，零外部依赖（无需 zstd/zstdcat/Homebrew）· 账户余额走 DeepSeek 账号登录或 API Key · 峰谷分档计价 · 成本构成 · 按会话明细 · 预算告警。Community token usage, cost \u0026 balance panel for DeepSeek Harness.",
     "type":  "module",
     "main":  "lib/index.js",
     "exports":  {
@@ -27,10 +27,20 @@
                      "dsh",
                      "dsh-plugin",
                      "deepseek-harness",
+                     "deepseek",
                      "token",
+                     "token-usage",
                      "usage",
+                     "usage-statistics",
                      "cost",
+                     "cost-tracking",
+                     "balance",
+                     "account",
                      "billing",
+                     "budget",
+                     "pricing",
+                     "peak",
+                     "dashboard",
                      "panel"
                  ],
     "homepage":  "https://github.com/olimc2016/dsh-token-meter-panel#readme",
@@ -58,6 +68,7 @@
                            }
             },
     "dependencies":  {
+                         "@deepseek-ai/dsh-home-paths":  "^0.2.0-rc.2",
                          "@deepseek-ai/schemastery":  "^3.18.2"
                      },
     "peerDependencies":  {
@@ -79,9 +90,11 @@
     "scripts":  {
                     "build":  "node tools/build-client.mjs",
                     "watch":  "node tools/build-client.mjs --watch",
-                    "setup":  "powershell -ExecutionPolicy Bypass -File tools/setup-modules.ps1",
-                    "test":  "node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs",
-                    "prepublishOnly":  "npm run build \u0026\u0026 npm test"
+                    "setup":  "node tools/setup-modules.mjs",
+                    "test":  "node tools/verify-generations.mjs \u0026\u0026 node tools/verify-core.mjs \u0026\u0026 node tools/verify-zstd.mjs \u0026\u0026 node tools/verify-rates.mjs \u0026\u0026 node tools/verify-storage.mjs \u0026\u0026 node tools/smoke-host.mjs \u0026\u0026 node tools/smoke-client.mjs \u0026\u0026 node tools/verify-twin.mjs",
+                    "prepublishOnly":  "npm run build \u0026\u0026 npm test",
+                    "twin":  "node tools/make-twin.mjs",
+                    "publish:twin":  "npm run twin \u0026\u0026 npm publish dist/dsh-token-mb"
                 },
     "publishConfig":  {
                           "registry":  "https://registry.npmjs.org/"

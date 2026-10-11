@@ -45,8 +45,17 @@ export const PRICE_TIERS = {
     output: { offPeak: 4, peak: 8 },
   },
 };
-export const BILLING_PROVIDER = 'deepseek-official';
-const FALLBACK_RATE = 'deepseek-flash';
+/**
+ * 计费口径：只有 DeepSeek 官方路由的调用才折算 CNY，其他 provider（第三方中转、
+ * 自建端点等）只记 token、不给金额。
+ *   - deepseek-official：API Key 路由（@deepseek-ai/dsh-llm-deepseek-api-key 注册）
+ *   - deepseek-account ：桌面端 DeepSeek 账号登录路由（@deepseek-ai/dsh-llm-deepseek-account）
+ * 两个 id 必须与基座实际注册的 provider 名一致：只写死 official 时，用桌面端
+ * 账号登录的会话（本地日志里 source.provider === 'deepseek-account'）一条都统计不到。
+ */
+export const OFFICIAL_PROVIDERS = ['deepseek-official', 'deepseek-account'];
+/** @deprecated 改用 OFFICIAL_PROVIDERS；仅保留旧名，避免破坏外部导入。 */
+export const BILLING_PROVIDER = OFFICIAL_PROVIDERS[0];
 
 /* ------------------------------------------------------------------ *
  * 时间：一律按北京时间（UTC+8）分桶，与机器时区解耦
@@ -173,14 +182,118 @@ function packBucket(b) {
   };
 }
 
+/** 把 src 桶累加进 dst —— 用于缓存复用：每个文件的贡献单独算，命中缓存时直接合并。 */
+function mergeBucket(dst, src) {
+  dst.miss += src.miss; dst.hit += src.hit; dst.out += src.out;
+  dst.cacheWrite += src.cacheWrite; dst.reasoning += src.reasoning;
+  dst.calls += src.calls; dst.cny += src.cny;
+  dst.peakCalls += src.peakCalls; dst.unpricedCalls += src.unpricedCalls;
+  if (src.firstTime != null && (dst.firstTime == null || src.firstTime < dst.firstTime)) dst.firstTime = src.firstTime;
+  if (src.lastTime != null && (dst.lastTime == null || src.lastTime > dst.lastTime)) dst.lastTime = src.lastTime;
+  for (let i = 0; i < 24; i += 1) dst.byHour[i] += src.byHour[i];
+  for (const tier of ['peak', 'offPeak']) {
+    const a = dst.tier[tier], b = src.tier[tier];
+    a.hit += b.hit; a.miss += b.miss; a.out += b.out; a.cny += b.cny; a.calls += b.calls;
+  }
+  for (const [m, n] of src.models) dst.models.set(m, (dst.models.get(m) || 0) + n);
+}
+
+/**
+ * 算「一个会话日志文件」对总量的贡献，与全局状态无关 —— 因此可以按 (mtimeMs, size) 缓存：
+ * 文件没变就直接合并上次的结果，跳过解压与解析（工作机上全量重扫曾要 70 秒）。
+ * @param {object[]} records 该文件的记录
+ * @param {{rates:object, includeOtherProviders:boolean, billingProviders:string[]}} opts
+ * @param {object} f 文件描述（workspace/sessionId）
+ */
+function contributionOf(records, opts, f) {
+  const { rates, includeOtherProviders, billingProviders } = opts;
+  const days = new Map();
+  const models = new Map();
+  const providers = new Map();
+  const bucket = blankBucket();
+  bucket.id = f.sessionId;
+  bucket.workspace = f.workspace;
+  bucket.title = null;
+  bucket.createdAt = null;
+  bucket.delegationDepth = 0;
+  bucket.parentId = null;
+  bucket.agentLabel = null;
+  let calls = 0;
+  let unpriced = 0;
+
+  for (const rec of records) {
+    if (rec.type === 'session') {
+      bucket.createdAt = rec.createdAt ?? rec.time ?? null;
+      bucket.delegationDepth = rec.delegationDepth ?? 0;
+      bucket.parentId = rec.parentSession ?? null;
+      continue;
+    }
+    if (rec.type === 'subagent/descriptor') {
+      bucket.agentLabel = rec.data?.label ?? rec.data?.description ?? bucket.agentLabel;
+      continue;
+    }
+    if (rec.type === 'session/title' && rec.data?.title) {
+      bucket.title = rec.data.title;
+      continue;
+    }
+    const got = usageOf(rec);
+    if (!got) continue;
+    const provider = got.source?.provider ?? 'unknown';
+    const model = got.source?.model ?? 'unknown';
+    const billed = billingProviders.includes(provider);
+    if (!billed && !includeOtherProviders) continue;
+
+    calls += 1;
+    const cost = billed ? costOf(got.usage, model, got.time, rates) : null;
+    if (billed && !cost) unpriced += 1;
+    const tokens = (got.usage.inputTokens || 0) + (got.usage.cacheReadTokens || 0) + (got.usage.outputTokens || 0);
+
+    const dk = dayKeyOf(got.time);
+    if (!days.has(dk)) days.set(dk, blankBucket());
+    accumulate(days.get(dk), got.usage, model, got.time, cost);
+    accumulate(bucket, got.usage, model, got.time, cost);
+
+    const mk = `${provider} | ${model}`;
+    if (!models.has(mk)) models.set(mk, blankBucket());
+    accumulate(models.get(mk), got.usage, model, got.time, cost);
+
+    const pt = providers.get(provider) ?? { calls: 0, tokens: 0, cny: 0 };
+    pt.calls += 1; pt.tokens += tokens; pt.cny += cost ? cost.cny : 0;
+    providers.set(provider, pt);
+  }
+  bucket.isSubagent = bucket.delegationDepth > 0;
+  return { key: `${f.workspace}/${f.sessionId}`, session: bucket, days, models, providers, calls, unpriced };
+}
+
+/**
+ * 会话日志文件名 → 格式代际。
+ * 官方持久化布局（@deepseek-ai/dsh-session-persistence-jsonl）：
+ *   `session.jsonl[.zstd]`（v0）、`session.vN.jsonl[.zstd]`
+ * 运行时永远只读写「数值最高的 generation」，而迁移出的旧代际文件按设计
+ * **逐字节保留在磁盘上**（"源保持逐字节不变"）。因此同一会话目录里出现
+ * v3 + v4、v1 + v4、裸 session.jsonl + v4 都是正常状态，扫描时必须只取最高一代：
+ *   - 全都收 → 同一批用量被算两次，金额翻倍
+ *   - 写死只认某一代（早先是 v3）→ 升级到 v4 之后新增用量永远看不到
+ * @param {string} name 文件名
+ * @returns {{gen:number, compressed:boolean}|null} 非会话日志返回 null
+ */
+function generationOf(name) {
+  const m = /^session(?:\.v(\d+))?\.jsonl(\.zstd)?$/.exec(name);
+  if (!m) return null;
+  return { gen: m[1] ? Number(m[1]) : 0, compressed: Boolean(m[2]) };
+}
+
 /**
  * 扫描会话根目录并聚合。
- * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.v3].jsonl.zstd
+ * 目录层级实测为三层：<sessionsRoot>/<workspace>/<sessionId>/session[.vN].jsonl[.zstd]
  * （兼容工作区目录下直接放文件的形态）
  * @param {string} sessionsRoot 会话根目录
- * @param {{rates?:object, includeOtherProviders?:boolean, limit?:number}} [options]
+ * @param {{rates?:object, includeOtherProviders?:boolean, billingProviders?:string[], limit?:number, budgetMs?:number, cache?:Map, sinceMs?:number}} [options]
+ *        cache 为一个可复用的 Map<file, {mtimeMs,size,signature,contribution}>：调用方跨次保留它，
+ *        未变动的日志文件会被直接复用（filesReused 报告命中数），已变动的重算。
+ *        sinceMs > 0 时只统计「最后一次写入在 sinceMs 之后」的会话（见 filesOutsideWindow）。
  */
-export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, limit = Infinity, budgetMs = 0 } = {}) {
+export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProviders = false, billingProviders = OFFICIAL_PROVIDERS, limit = Infinity, budgetMs = 0, cache = null, sinceMs = 0 } = {}) {
   const files = [];
   const listEntries = (p) => {
     try {
@@ -189,7 +302,6 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
       return [];
     }
   };
-  const isLog = (n) => n.endsWith('.jsonl') || n.endsWith('.jsonl.zstd');
   if (existsSync(sessionsRoot)) {
     for (const ws of listEntries(sessionsRoot)) {
       if (!ws.dir) continue;
@@ -199,33 +311,70 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
         const sessionId = lvl2.dir ? lvl2.name : lvl2.name.split('__')[0];
         const candidates = lvl2.dir ? listEntries(lvl2.path) : [lvl2];
         for (const c of candidates) {
-          if (c.dir || !isLog(c.name)) continue;
+          if (c.dir) continue;
+          const generation = generationOf(c.name);
+          if (!generation) continue; // session.lock、导出文件等一律不是会话日志
           let st;
           try { st = statSync(c.path); } catch { continue; }
           files.push({
             workspace: ws.name, sessionId, name: c.name, file: c.path,
-            mtimeMs: st.mtimeMs, size: st.size,
+            mtimeMs: st.mtimeMs, size: st.size, ...generation,
           });
         }
       }
     }
   }
-  // 同一会话 v3 与旧版并存时只认 v3，否则用量翻倍
-  const v3Ids = new Set(
-    files.filter((f) => f.name.includes('session.v3.jsonl')).map((f) => `${f.workspace}/${f.sessionId}`),
-  );
-  const all = files.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const kept = all
-    .filter((f) => f.name.includes('session.v3.jsonl') || !v3Ids.has(`${f.workspace}/${f.sessionId}`))
-    .slice(0, limit === Infinity ? undefined : limit);
-  const skipped = all.filter((f) => !kept.includes(f));
+  // 每个会话只保留最高代际；同代际（正常不会出现）先取压缩版，再取更新的那个。
+  const newest = new Map();
+  for (const f of files) {
+    const key = `${f.workspace}/${f.sessionId}`;
+    const prev = newest.get(key);
+    if (!prev) { newest.set(key, f); continue; }
+    const better = f.gen !== prev.gen
+      ? f.gen > prev.gen
+      : f.compressed !== prev.compressed
+        ? f.compressed
+        : f.mtimeMs > prev.mtimeMs;
+    if (better) newest.set(key, f);
+  }
+  // 时间窗口：只看窗口内有写入的会话文件。日志按 mtime（最后一次写入）取舍 ——
+  // 跨月仍在用的会话 mtime 是新的，照常进来；早已结束的老会话直接不读。
+  // 这样「首次安装要看最近 30 天」不需要把全部历史解压一遍。
+  const inWindow = sinceMs > 0 ? [...newest.values()].filter((f) => f.mtimeMs >= sinceMs) : [...newest.values()];
+  const outsideWindow = newest.size - inWindow.length;
+  const all = inWindow.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const kept = all.slice(0, limit === Infinity ? undefined : limit);
+  const skipped = all.slice(kept.length);
 
   const days = new Map();
   const sessions = new Map();
   const models = new Map();
   const providerTotals = new Map();
-  let calls = 0, unpriced = 0, unreadable = 0;
+  let calls = 0, unpriced = 0, unreadable = 0, reused = 0;
   let newestMtime = 0;
+
+  // 缓存的键里必须带「计价口径」签名：费率/口径变了，旧的贡献就不能再用（否则改了设置不生效）。
+  const signature = JSON.stringify([rates, includeOtherProviders, billingProviders]);
+  const contributionOpts = { rates, includeOtherProviders, billingProviders };
+
+  const merge = (c) => {
+    for (const [k, v] of c.days) {
+      if (!days.has(k)) days.set(k, blankBucket());
+      mergeBucket(days.get(k), v);
+    }
+    for (const [k, v] of c.models) {
+      if (!models.has(k)) models.set(k, blankBucket());
+      mergeBucket(models.get(k), v);
+    }
+    for (const [k, v] of c.providers) {
+      const t = providerTotals.get(k) ?? { calls: 0, tokens: 0, cny: 0 };
+      t.calls += v.calls; t.tokens += v.tokens; t.cny += v.cny;
+      providerTotals.set(k, t);
+    }
+    calls += c.calls;
+    unpriced += c.unpriced;
+    sessions.set(c.key, c.session);
+  };
 
   // 时间预算：会话日志可能非常大（几十上百个文件、单个几百 MB），全量解压会把首屏拖到一分钟以上。
   // kept 已按 mtime 倒序（最新优先），所以超预算直接停手，保住"最近/今天"这部分数据。
@@ -236,75 +385,35 @@ export function aggregate(sessionsRoot, { rates = PRICE_TIERS, includeOtherProvi
   for (const f of kept) {
     if (Date.now() > deadline) { partialScan = true; break; }
     scanned += 1;
+    if (f.mtimeMs > newestMtime) newestMtime = f.mtimeMs;
+
+    const cached = cache instanceof Map ? cache.get(f.file) : undefined;
+    if (cached && cached.mtimeMs === f.mtimeMs && cached.size === f.size && cached.signature === signature) {
+      reused += 1;
+      merge(cached.contribution);
+      continue;
+    }
+
     let records;
     try {
       records = readSessionRecords(f.file);
     } catch (error) {
+      // 读不出来的文件仍然出一个（空的）会话条目，与旧行为一致；但**不写缓存**，下次还会重试
       unreadable += 1;
-      records = [];
+      merge(contributionOf([], contributionOpts, f));
+      continue;
     }
-    if (f.mtimeMs > newestMtime) newestMtime = f.mtimeMs;
-
-    const sBucket = blankBucket();
-    sBucket.id = f.sessionId;
-    sBucket.workspace = f.workspace;
-    sBucket.title = null;
-    sBucket.createdAt = null;
-    sBucket.delegationDepth = 0;
-    sBucket.parentId = null;
-    sBucket.agentLabel = null;
-
-    for (const rec of records) {
-      if (rec.type === 'session') {
-        sBucket.createdAt = rec.createdAt ?? rec.time ?? null;
-        sBucket.delegationDepth = rec.delegationDepth ?? 0;
-        sBucket.parentId = rec.parentSession ?? null;
-        continue;
-      }
-      if (rec.type === 'subagent/descriptor') {
-        sBucket.agentLabel = rec.data?.label ?? rec.data?.description ?? sBucket.agentLabel;
-        continue;
-      }
-      if (rec.type === 'session/title' && rec.data?.title) {
-        sBucket.title = rec.data.title;
-        continue;
-      }
-      const got = usageOf(rec);
-      if (!got) continue;
-      const provider = got.source?.provider ?? 'unknown';
-      const model = got.source?.model ?? 'unknown';
-      const billed = provider === BILLING_PROVIDER;
-      if (!billed && !includeOtherProviders) continue;
-
-      calls += 1;
-      const cost = billed ? costOf(got.usage, model, got.time, rates) : null;
-      if (billed && !cost) unpriced += 1;
-      const tk = (got.usage.inputTokens || 0) + (got.usage.cacheReadTokens || 0) + (got.usage.outputTokens || 0);
-
-      const dk = dayKeyOf(got.time);
-      if (!days.has(dk)) days.set(dk, blankBucket());
-      const day = days.get(dk);
-      accumulate(day, got.usage, model, got.time, cost);
-      accumulate(sBucket, got.usage, model, got.time, cost);
-
-      const mk = `${provider} | ${model}`;
-      if (!models.has(mk)) models.set(mk, blankBucket());
-      accumulate(models.get(mk), got.usage, model, got.time, cost);
-
-      const pk = provider;
-      if (!providerTotals.has(pk)) providerTotals.set(pk, { calls: 0, tokens: 0, cny: 0 });
-      const pt = providerTotals.get(pk);
-      pt.calls += 1; pt.tokens += tk; pt.cny += cost ? cost.cny : 0;
-    }
-
-    sBucket.isSubagent = sBucket.delegationDepth > 0;
-    sessions.set(f.sessionId, sBucket);
+    const contribution = contributionOf(records, contributionOpts, f);
+    if (cache instanceof Map) cache.set(f.file, { mtimeMs: f.mtimeMs, size: f.size, signature, contribution });
+    merge(contribution);
   }
 
   return {
     generatedAt: Date.now(),
     sessionsRoot,
     filesScanned: scanned,
+    filesReused: reused,
+    filesOutsideWindow: outsideWindow,
     filesSkippedAsStale: skipped.map((f) => f.sessionId),
     unreadableFiles: unreadable,
     newestSourceMtime: newestMtime || null,
@@ -332,7 +441,6 @@ export const todayKey = (now = Date.now()) => dayKeyOf(now);
 
 /** 把聚合结果裁剪到只看最近 N 天（含今天），用于 7/30 天视图 */
 export function sliceDays(summary, days, now = Date.now()) {
-  const end = new Date(Date.now() ? now : now);
   const keys = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now - i * 86400000);

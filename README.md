@@ -1,7 +1,7 @@
 # dsh-token-meter-panel
 
-> DSH（DeepSeek Harness）的 Token 用量与花费面板插件。
-> 在侧栏加一个独立视图：今天花了多少钱、花在哪、缓存帮你省了多少。
+> DSH（DeepSeek Harness）的 Token 用量 / 花费 / 余额面板插件 —— **兼容 DSH 0.2.x，零外部依赖**。
+> 在侧栏加一个独立视图：今天花了多少钱、钱花在哪、缓存帮你省了多少、账户还剩多少。
 
 [English](README.en.md) | 中文
 
@@ -13,6 +13,34 @@
 > **面板里的金额是本机估算，不是官方账单。** 内置费率核对自
 > [DeepSeek 官方定价页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing)（采集日期见下文），
 > 价格可能随时变动，**请以官方页面为准**；本插件不作任何计费承诺。
+
+---
+
+## 为什么是这一份
+
+DSH 生态里有 20 多个 token 统计插件。这一份的差异是**装得上、算得对、看得见钱**：
+
+| 能力 | **本插件** | dsh-token-usage | dsh-token-meter | dsh-usage |
+|---|---|---|---|---|
+| 兼容 DSH 0.2.x（0.2.0-rc.2 实测） | ✅ | ✅ | ⚠️ 装得上 | ❌ 被版本闸门拒绝 |
+| 外部依赖 | **零**（自带多帧 zstd 解码） | 无 | **要求 PATH 里有 `zstdcat`** | 无 |
+| 峰 / 谷分档计价 | ✅ | ✅ | ❌ 无计价代码 | ❌ 无峰谷逻辑 |
+| 账户余额 | ✅ **账号登录 + API Key 双路** | ❌ | ❌ | ❌ |
+| 计价币种与费率 | CNY，对得上官方现价 | CNY | — | USD，写死且含退役模型名 |
+| 面板位置 | **侧栏 + 中栏独立面板** | 设置分区 | 设置对话框 + 浮层 | 设置分区 |
+| 平台 | macOS 实测 + Windows（CI 全套自检） | — | macOS 桌面端取不到数 | — |
+
+> 上表是 **2026-10-10 在 DSH 0.2.0-rc.2 / macOS 14.8 上的实测**（能否安装、代码里是否存在对应逻辑），
+> 只列公开可核对的事实，不评价作者；这些插件后续更新可能改变结论。
+> 至少在我实测的这几份里，**同时满足「0.2.x 可用 + 零外部依赖 + 峰谷计价 + 余额」的只有这一份。**
+
+两个最常见的坑，这里都不存在：
+
+- **不需要装 `zstd`/`zstdcat`/Homebrew**：会话日志是多帧 zstd，本插件用纯 JS 自己按帧解压（[`src/zstd.mjs`](src/zstd.mjs)）。
+  依赖外部二进制的那类插件，在 macOS 桌面端基本都用不了——DSH 主进程的 PATH 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，
+  Homebrew 装的 `/opt/homebrew/bin` 不在其中。
+- **账号登录也能看到余额**：桌面端默认是 DeepSeek 账号登录（本机没有 API Key），本插件走官方账号服务取余额；
+  只认 API Key 的老插件在这类环境里只会显示「未配置凭据」。
 
 ---
 
@@ -34,9 +62,15 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 
 ## 功能
 
+- **官方用量 30 天（免登录）**：直接走 DSH 账号会话（`x-dsh-auth-token`，与内嵌官方用量页同一条通路），
+  不需要浏览器登录、不需要 API Key —— 桌面端已登录即可出数（按天趋势 / 按模型 / 请求数）。
+
+- **今日消费 / 账户余额 / 累计消费**：余额走 DeepSeek 账号登录或 API Key；
+  **累计消费**（账号开通以来）走账号授权直接查官方 `get_user_summary`，**不需要任何网页登录**。
+
 | 区块 | 内容 |
 |---|---|
-| 今日消费 | 金额大字、预算进度条、与上次使用对比、账户余额（可选） |
+| 今日消费 | 金额大字、预算进度条、与上次使用对比、账户余额（DeepSeek 账号登录或 API Key 自动识别） |
 | 四宫格 | 未命中输入 / 缓存命中输入 / 输出 token、缓存命中率 + 调用次数 |
 | 每日趋势 | 可切近 7 天 / 近 30 天，柱状按三类 token 堆叠，悬浮看当天明细 |
 | 今日分时 | 24 小时 token 分布，标出峰值小时 |
@@ -50,6 +84,18 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 ---
 
 ## 安装
+
+> ### 两个包名，同一个插件
+>
+> 本插件以两个名字发布，**代码完全相同**，装哪个都行：
+>
+> | 包名 | 说明 |
+> |---|---|
+> | [`dsh-token-meter-panel`](https://www.npmjs.com/package/dsh-token-meter-panel) | 主力包（本仓库名） |
+> | [`dsh-token-mb`](https://www.npmjs.com/package/dsh-token-mb) | 短名孪生包，由 `npm run twin` 从同一份源码生成 |
+>
+> 两个包的插槽行 id、webServer 路由前缀、设置命名空间、浏览器侧 slot id 全部独立，
+> 所以**同时装两个也不会冲突**（会看到两个「Token」面板）。日常只需装一个。
 
 ### 方式零：一键脚本（推荐）
 
@@ -243,12 +289,25 @@ DSH 的 `.jsonl.zstd` 是**追加写入的多帧 zstd**：
 ## 开发
 
 ```bash
-npm run setup    # 建本地模块解析入口（junction，见下）
-npm test         # 采集自检 + 宿主烟测 + 客户端烟测
+npm run setup    # 建本地模块解析入口（Windows 用 junction，macOS/Linux 用符号链接）
+npm test         # 代际/provider 回归 + 采集自检 + 宿主烟测 + 客户端烟测
 npm run build    # 重建 lib/client.js（改 src/client/index.js 后必须执行）
 npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 ```
 
+> `npm test` 在**任何平台、任何机器**上都能跑：需要会话日志的自检找不到日志时自动跳过，
+> 不依赖任何人的本机路径。CI（[`.github/workflows/test.yml`](.github/workflows/test.yml)）
+> 会在 ubuntu 与 windows 两套 runner 上各跑一遍，防止再出现「只在我这台机器上成立」的假设。
+### 改界面时的自查（不用装/不用重启 DSH）
+
+```bash
+node tools/preview.mjs --open        # 用真实日志数据 + 真 bundle 渲染一页面板预览，浏览器直接看
+node tools/preview.mjs --width 620   # 窄宽度再看一眼响应式表现
+```
+
+`tools/preview.mjs` 用一个极小的 React 垫片把面板产出的元素树落成 DOM（面板全部用内联样式，
+所以视觉与真机等价），数据来自本机会话日志，余额由假账号服务注入 —— 改配色/间距/布局时比每次重启
+DSH 快得多；要更新市场截图也可以用它批量出图。
 目录结构：
 
 ```
@@ -265,9 +324,10 @@ npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 └── tools/                # 构建与自检脚本
 ```
 
-> **`npm run setup` 为什么需要**：Node 解析 junction/symlink 时使用**真实路径**，
+> **`npm run setup` 为什么需要**：Node 解析 symlink/junction 时使用**真实路径**，
 > 插件目录内的 `import '@deepseek-ai/schemastery'` 不会去 profile 的 `node_modules` 找。
-> 该脚本在插件目录内建 junction 指向基座包。缺失时插件会优雅降级：不注册设置项，其余功能照常。
+> 该脚本（[tools/setup-modules.mjs](tools/setup-modules.mjs)，跨平台；旧的 `.ps1` 仍保留给 Windows 用）
+> 在插件目录内建链接指向基座包。缺失时插件会优雅降级：不注册设置项，其余功能照常。
 > **运行时不需要这一步**：宿主的 Node 服务进程以应用目录为解析起点，能正常命中基座包。
 
 改宿主代码（`lib/index.js`、`src/core.mjs`）需要重启 DSH 才生效；

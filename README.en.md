@@ -1,7 +1,8 @@
 # dsh-token-meter-panel
 
-> Token usage & cost panel for [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness).
-> A dedicated sidebar view: how much you spent today, where it went, and how much the disk cache saved you.
+> Token usage, cost **and balance** panel for [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness)
+> — **works on DSH 0.2.x, zero external dependencies**.
+> A dedicated sidebar view: how much you spent today, where it went, how much the disk cache saved you, and what is left in your account.
 
 [中文](README.md) | English
 
@@ -15,6 +16,33 @@
 > **The amounts shown are local estimates, not an official bill.** Built-in rates were checked
 > against the [official pricing page](https://api-docs.deepseek.com/quick_start/pricing) (capture
 > date below); prices can change at any time — **always defer to the official page**.
+
+---
+
+## Why this one
+
+There are 20+ token-statistics plugins in the DSH ecosystem. This one exists to be **installable, correct, and about money**:
+
+| Capability | **This plugin** | dsh-token-usage | dsh-token-meter | dsh-usage |
+|---|---|---|---|---|
+| Runs on DSH 0.2.x (tested on 0.2.0-rc.2) | ✅ | ✅ | ⚠️ installs | ❌ rejected by the version gate |
+| External dependencies | **none** (built-in multi-frame zstd decoder) | none | **requires `zstdcat` on PATH** | none |
+| Peak / off-peak pricing | ✅ | ✅ | ❌ no pricing code | ❌ no peak logic |
+| Account balance | ✅ **account sign-in *and* API key** | ❌ | ❌ | ❌ |
+| Rates & currency | CNY, matches the official price list | CNY | — | USD, hard-coded, retired model names |
+| Where it lives | **sidebar + dedicated centre panel** | settings section | settings dialog + overlay | settings section |
+| Platforms | macOS verified; Windows covered by CI | — | unusable on macOS desktop | — |
+
+> Measured **2026-10-10 on DSH 0.2.0-rc.2 / macOS 14.8** (whether it installs; whether the logic exists in its code).
+> Publicly checkable facts only — no judgement about the authors, and their future releases may change this.
+
+The two most common traps are absent here:
+
+- **No `zstd`/`zstdcat`/Homebrew required**: session logs are multi-frame zstd and this plugin decodes them in pure JS
+  ([`src/zstd.mjs`](src/zstd.mjs)). Plugins that shell out to an external binary mostly cannot work in the macOS desktop
+  app — its process PATH is only `/usr/bin:/bin:/usr/sbin:/sbin`, so a Homebrew `zstd` in `/opt/homebrew/bin` is invisible to it.
+- **Balance works with account sign-in**: the desktop defaults to a DeepSeek account login with no API key; this plugin asks
+  the official account service for the balance, while API-key-only plugins can only report "credential not configured".
 
 ---
 

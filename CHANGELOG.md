@@ -1,5 +1,177 @@
 # 变更记录
 
+## 0.6.5 — 账号余额、余额显示放大、统计口径修正
+
+### 修复
+
+- **账号登录的用户看不到余额**：余额原来只走 API Key（`https://api.deepseek.com/user/balance`），
+  而桌面端默认是 DeepSeek 账号登录，本机压根没有 `DEEPSEEK_API_KEY`，于是永远显示「未配置凭据」。
+  现在优先调用官方账号服务 `ctx.get('deepseekAccount').getBalance()`（账号 token 走 platform 的
+  `/api/v0/users/get_user_summary`），把 `normal_wallets`（充值）/ `bonus_wallets`（赠送）归一成
+  `balance_infos`（`total = 充值 + 赠送`，十进制字符串相加，不会出现 `13.999999999`）；
+  未登录账号时才回退 API Key 路径。按官方约定通过 `x-client-*` 头上报调用方版本/语言/时区。
+- **桌面端账号登录的用户面板恒为 0**：计费 provider 原来只认 `deepseek-official`（API Key 路由），
+  而桌面端账号登录走的是 `deepseek-account`，本地日志里这些调用被整体过滤掉。
+  现在官方计费口径是这两个路由的集合（`OFFICIAL_PROVIDERS`），本机实测立刻出数。
+- **会话日志代际只特判 v3，导致升级后漏算或翻倍**：DSH 持久化会把迁移出的旧代际文件
+  逐字节保留在磁盘上，运行时只用最高代际。原实现「存在 v3 就丢弃其他」会让
+  `v3 + v4` 永远读过期快照（新增用量看不到），而 `v1 + v4`、裸 `session.jsonl + v4`
+  又会把同一批用量算两遍（金额翻倍）。现在按 `workspace/sessionId` 只取版本号最高的那一份。
+- **后台自动更新在 macOS 桌面端必然失败**：桌面端进程 PATH 只有 `/usr/bin:/bin:/usr/sbin:/sbin`，
+  用户 shell 里的 `dsh` 不在其中。现在优先用桌面端自带 CLI 入口
+  （`app.asar/.../dsh-desktop-host/lib/cli.js` + `ELECTRON_RUN_AS_NODE`），找不到才回退 PATH 上的 `dsh`。
+- **更新提示里写死 `--profile desktop`**：改为使用当前 profile。
+- `officialOnly` 与 `apiKeyEnv` 的设置说明补全（前者关掉后会计入第三方 token 但只有官方路由折算金额；
+  后者只在未登录账号时使用）。
+
+### 界面
+
+- **余额单独成块、数字放大到 23px**（原来是 11px 小字里跟在「更新于 …」后面）：
+  带边框/底色，`含赠送 ¥x` 作为次要信息，来源（账号 / API Key）用小徽标标注，
+  点一下即可余额 + 用量一起重新取数；未登录/查询失败时显示明确原因而不是空白。
+
+### 工程
+
+- **自检脚本不再写死作者机器路径**（`C:/Users/oli20/...`、`F:/DSH/...`），新增
+  [tools/paths.mjs](tools/paths.mjs) 统一解析 `DSH_SESSIONS` → `DSH_HOME/sessions` → `~/.dsh/sessions`；
+  没有会话日志时自动跳过而不是崩掉。
+- 新增跨平台 [tools/setup-modules.mjs](tools/setup-modules.mjs)（Windows junction / POSIX 符号链接），
+  `npm run setup` 不再依赖 PowerShell。
+- 新增回归测试 [tools/verify-generations.mjs](tools/verify-generations.mjs)：自造多帧 zstd 会话日志，
+  覆盖六个代际组合与 provider 口径（旧代码下这 9 项会失败）。
+- [tools/smoke-host.mjs](tools/smoke-host.mjs) 增加余额回归：账号路径必须映射出
+  `total = 充值 + 赠送`，并把 `version/locale/timezoneOffsetSeconds` 传给官方服务；
+  没有账号、没有凭据时必须明确回退并给出原因。
+- 新增 CI [.github/workflows/test.yml](.github/workflows/test.yml)：ubuntu + windows 各跑一遍 `npm test`。
+- 去掉 `sliceDays` 里一行无用代码。
+
+### 界面
+
+- **修掉「消费与余额并排」引发的布局塌陷**：卡片一窄，`minmax(0, 1fr) auto` 会把「今日消费」
+  压成一字一行（真机预览实测到的）。现在消费卡用 `flex-wrap`（宽了并排、窄了自动换行），
+  hero 也从固定三列网格改成 flex：**消费 + 余额独占一整行真正并排**，两张副卡等分下一行
+  （`grid auto-fit` 在只有两张卡时会留空槽）。
+- 历史表的标题从「历史（官方查询）」改成「历史（按天）」——数据现在也可能来自本地日志。
+- 新增 [tools/preview.mjs](tools/preview.mjs)：用真实日志数据 + 真实 `lib/client.js` 在浏览器里
+  自渲染一页面板预览（内置极小 React 垫片），改 UI 时不必反复重启 DSH，也可用来重出市场截图。
+
+### 性能
+
+- **增量扫描**：`aggregate()` 支持传入可复用的文件级缓存（宿主跨次保留）。会话日志文件按
+  `(mtimeMs, size)` 判定，未变动就直接复用上次算出的贡献，只重新解压/解析变动过的文件；
+  缓存键里带「计价口径签名」，所以改了费率或 provider 口径会整体失效（不会读到旧价）。
+  结果里新增 `filesReused`。首屏仍是全量扫描，但之后的自动刷新从「全量重扫」变成「只读增量」——
+  工作机上曾要 70 秒的场景，现在只受时间预算 `scanBudgetMs` 约束。
+- 新增设置项 `scanBudgetMs`（此前代码在读它，但 schema 里没有，等于不可配置）。
+- **统计窗口 `historyDays`（默认 30 天）+ 首次安装就能看到**：`aggregate()` 新增 `sinceMs`，
+  只统计「最后一次写入在窗口内」的会话文件（结果里给出 `filesOutsideWindow`）——所以
+  **刚装好也直接按 30 天出数**，不需要把全部历史解压一遍。
+  客户端在 `partialScan` 为真期间会继续快速重试，而宿主对未变动文件走上面的增量缓存，
+  因此每一轮只补扫剩下的部分，几轮内就把窗口补齐；官方用量查询本来就是 30 天
+  （`OFFICIAL_DAYS`），本地历史表的上限也从 14 天对齐到 30 天。
+  页脚相应标出「复用 N 个文件」「窗口外 N」「正在补扫历史…」。
+
+### 双名发布（`dsh-token-mb`）
+
+- 新增 [tools/make-twin.mjs](tools/make-twin.mjs)：从同一份源码生成孪生包 `dist/dsh-token-mb/`
+  （`npm run twin`，发布 `npm run publish:twin`）。两个包**代码完全相同**，只有包名与各类标识不同。
+- 为了让两个包**同时装也不冲突**，所有会撞车的标识都改成由包名派生：
+  - 宿主：插件 `name`、webServer 路由前缀、settings 命名空间、升级 spec（主力包走 GitHub tag，
+    孪生包走 npm spec）——`lib/index.js` 里从 `package.json` 的 name 派生；
+  - 浏览器：slot id、路由前缀、locale 命名空间 —— 由 `tools/build-client.mjs` 在构建期通过 esbuild
+    `define` 注入包名后派生（主力包沿用历史 slot id `tokenmeter`，不动用户已有的侧栏选择）；
+  - 插槽行 id 各自写在自己的 `cordis.patch.yml`（`token-meter-panel` / `token-meter-mb`）。
+- 新增 [tools/verify-twin.mjs](tools/verify-twin.mjs)：生成孪生包并断言「包名 / 行 id / 宿主插件 id /
+  客户端 bundle id / slot id 全都不同」，再在孪生包目录内跑一遍它自己的 smoke-host、
+  smoke-client、聚合回归 —— 已挂进 `npm test`（CI 的 ubuntu + windows 都会跑）。
+
+### 悬浮卡片 / 低余额提醒
+
+- **第二栏（量）也套上卡片面板**（`S.panel`），与第一、三栏同一种悬浮质感 —— 之前那栏只有四宫格
+  各自带边框，整栏没有卡片面。
+- 新增设置 **`lowBalanceAlert`（默认 20 元）**：余额低于该值时，**总余额转淡红**并在下方显示
+  `⚠ 余额偏低，低于 ¥20 · 建议充值 ↗`（点击打开官方账单页）；设 0 = 关闭提醒。
+- **预算金额**与**低余额阈值**都在 DSH 的插件设置里可改（`dailyBudget` / `lowBalanceAlert`），
+  带中文说明；面板上的预算条与低余额提醒都跟着设置走。
+
+### 布局 v3（按设计稿落地）
+
+- **三栏宽度改为 1:1:1**（原来 1.05/1.15/0.9 是随手定的），并按"一件事一张卡"配平内容。
+- **① 钱**：官方来源行收成徽标（`账号登录态 · 187 次`，接口地址进 tooltip）；预算条重画
+  （标签 + 右侧「已用 / 剩余」+ 干净进度条 + 预警刻度），去掉原来那个看着像黑块的 4% 填充。
+- **② 量**：新增**均值三连**（总 token / 调用 / **单次花费**，单位元/次、4 位小数）与
+  **总 token 构成**占比条（命中 / 未命中 / 输出 + 图例百分比）。
+- **③ 价**：原来分散的「价目表 + 当前档 vs 高峰 + 计价明细推导」**合并成一张表**：
+  项目 / 单价（当前·高峰）/ 今日用量 / 小计 + 空闲小计 / 高峰小计 / **今日合计**，下面一行口径脚注。
+- 趋势图柱内不再叠命中率标注（柱上已有金额，双标签太吵）；页脚合并成一行小字。
+- 设计稿与定稿规格见 [docs/design-v3.md](docs/design-v3.md)（含三版 mockup 的取舍过程）。
+
+### 第一栏四个金额
+
+- 消费卡新增 **今日 / 近 7 天 / 近 30 天 / 本月** 四个金额（2×2 整行，紧跟主数字、余额之上）。
+- 口径与主数字一致：官方用量可用时用官方按天数据（账号级），否则回退本地日志聚合；
+  两种数据形状（裸金额 / `{cny}`）都兼容，`本月` 按北京日期前缀归集。
+
+### 官方用量：账号会话直连（彻底不用登录，30 天真实数据）
+
+**这是这一版最重要的修复。** 之前「官方用量」只支持浏览器 `userToken`（`authorization: Bearer`），
+所以桌面端用户永远显示「未连接」。真相是：DSH 桌面端内嵌的官方用量页根本不用网页登录 ——
+`apps/desktop/src/platform-view.ts` 把**账号会话**注入到发往 platform.deepseek.com 的请求里，
+并通过 `window.dsh.getAuthToken()` 交给页面；用的就是 `deepseekAccount.getPlatformSession()` 那把 token，
+**和插件取余额用的是同一把**。
+
+- 宿主新增**账号会话取数**（首选）：`x-dsh-auth-token: <账号会话 token>` + 官方那 5 个客户端头
+  （`x-client-bundle-id`（故意为空）/`x-client-platform: desktop-mac|desktop-win|web`/
+  `x-client-version`/`x-client-locale`/`x-client-timezone-offset`），与内嵌页注入的完全一致。
+  失败才回退浏览器 `userToken`（Bearer），保留 Web 场景兼容。
+- 实测（真机，零登录）：`official.ok=true，auth=account`，30 天按天数据 + 按模型 + 请求数全部返回，
+  且与本地日志的今日花费逐分对得上。
+- 失败时把账号路径的错误码带进 payload（`accountError`），便于诊断，不再静默。
+- `tools/smoke-host.mjs` 新增离线断言：官方用量必须走账号会话、且请求确实带 `x-dsh-auth-token`
+  （用独立 ctx + fetch 桩，不打真网络）。
+
+### 官方累计消费（无需任何登录）
+
+- 面板第一栏余额下方新增一行**累计消费**：数据来自 `GET /api/v0/users/get_user_summary` 的
+  `total_costs`，用**账号授权**的那把会话 token 直接查（`getPlatformSession()`），
+  与 DSH 自己查余额同一条通路 —— **不需要浏览器登录**，也不依赖官方用量接口。
+  官方 SDK 的 `getBalance()` 只投影了钱包（`normal_wallets` / `bonus_wallets`），
+  所以这一项由宿主自己取；失败/无授权时静默省略，绝不影响余额显示。
+- 范围说明：这是**账号开通以来的累计**，不是按天用量；按天 30 天仍然需要网页登录态。
+
+### 官方用量：支持 DSH 内置浏览器
+
+- **读取器新增 DSH 桌面版自己的存储**：以前只扫 Chrome/Edge/Brave/Vivaldi 的 User Data，
+  而用户在 **DSH 内置浏览器**里登录 platform.deepseek.com 时，登录态落在
+  `~/Library/Application Support/@deepseek-ai/dsh-desktop`（默认 session + `Partitions/*`），
+  插件看不到 → 面板永远「未连接」。现在这两种 Electron 布局都会被扫到
+  （`findStorageRoots()` 追加 DSH userData；`listProfiles()` 支持根目录直挂与 `Partitions/*`）。
+  可用 `DSH_DESKTOP_USER_DATA_DIRS` 覆盖非标准安装位置。
+- 文案相应更新：「未连接 · 需登录 platform.deepseek.com」，tooltip 说明
+  Chrome/Edge **或 DSH 内置浏览器**均可，Safari/Firefox 读不到（macOS 沙盒限制）。
+
+### 生态
+
+- **会话根目录改走官方规则**：优先用官方库 [`@deepseek-ai/dsh-home-paths`](https://www.npmjs.com/package/@deepseek-ai/dsh-home-paths)
+  （显式配置 > `$DSH_HOME` > `~/.dsh`，空白环境变量视为未设置、支持 `~` 展开），
+  解析不到时退回等价实现。已加入 `dependencies`，`tools/setup-modules.mjs` 会为本地开发建立链接。
+  导出 `resolveSessionsRoot()` 供测试与复用。
+- **`inject` 收窄为 `['webServer']`**：按官方《services and dependencies》的约定，可选依赖不写进
+  `inject`（`settings` 一直是通过 `ctx.inject` 探测的，写进必需列表会让缺该服务的组合整体加载失败）。
+- `/health` 增加 `accountService` 字段，便于确认官方账号服务是否在位。
+
+### 文案
+
+- **「官方用量」提示改成一句话 + tooltip**：原文案「首次会打开官方网页，未登录请先在页面里登录，
+  回来即自动生效」既冗长、又只对 Chromium 系浏览器成立（Safari/Firefox 的登录态读不到）。
+  现在面板正文只有 `官方用量：未连接（可选） 连接`，把「为什么需要、支持哪些浏览器、余额与本地花费
+  不需要它」全部放进 tooltip；状态文案也从「未连接」改为「未连接（可选）」。
+- 新增 `no-browser` 失败态：机器上没有任何可读的 Chromium 配置时显示「未检测到 Chrome/Edge（可选）」，
+  **不再给出「连接」按钮**（避免让用户白跑一趟网页），原因同样在 tooltip 里。
+- `package.json` 的 description / keywords、中英文 README 首屏、`docs/listing.md` 上架文案一并重写：
+  把「兼容 DSH 0.2.x / 零外部依赖 / 账号登录也能看余额 / 峰谷计价」提到最前面，
+  并附一张与 dsh-token-usage、dsh-token-meter、dsh-usage 的实测对比表（2026-10-10，DSH 0.2.0-rc.2）。
+
 ## 0.6.4 — 面板细节打磨（措辞/配色/交互）
 
 ### 界面
