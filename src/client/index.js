@@ -56,6 +56,9 @@ const zh = {
   'autoSession': '浏览器登录态',
   'notConnected': '未连接（可选）',
   'totalSpent': '累计消费',
+  'lowBalance': '余额偏低，低于',
+  'lowBalanceHint': '在插件设置里可改「余额低于该值提醒」（0 = 关闭）',
+  'rechargeHint': '建议充值',
   'windowToday': '今日',
   'window7': '近 7 天',
   'window30': '近 30 天',
@@ -180,6 +183,9 @@ const en = {
   'autoSession': 'browser session',
   'notConnected': 'not connected (optional)',
   'totalSpent': 'Total spent',
+  'lowBalance': 'Low balance, below',
+  'lowBalanceHint': 'Configurable in plugin settings (0 disables)',
+  'rechargeHint': 'top up',
   'windowToday': 'Today',
   'window7': 'Last 7d',
   'window30': 'Last 30d',
@@ -718,6 +724,10 @@ function TokenMeterPanel(props) {
   const balInfo = balData?.ok ? balData.balance_infos?.[0] : null;
   const balCur = balInfo?.currency === 'USD' ? '$' : '¥';
   const balGranted = balInfo && Number(balInfo.granted_balance) > 0 ? String(balInfo.granted_balance) : null;
+  // 低余额提醒：低于设置阈值（默认 20 元）时总额转淡红 + 提示充值；0 = 关闭
+  const lowAlert = Number(data.config?.lowBalanceAlert) || 0;
+  const balLow = Boolean(balInfo) && lowAlert > 0 && Number(balInfo.total_balance ?? 0) < lowAlert;
+  const balLowColor = 'var(--dsw-alias-state-error-primary, #f85149)';
   // 官方账号的累计消费（/api/v0/users/get_user_summary 的 total_costs）；API Key 路径没有这项
   const balCostRow = (() => {
     const rows = balData?.total_costs;
@@ -951,7 +961,10 @@ function TokenMeterPanel(props) {
           balInfo
             ? React.createElement('span', {
               key: 'n',
-              style: { fontSize: 23, fontWeight: 750, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' },
+              style: {
+                fontSize: 23, fontWeight: 750, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+                color: balLow ? balLowColor : undefined, opacity: balLow ? 0.88 : undefined,
+              },
             }, [
               React.createElement('span', { key: 'c', style: { fontSize: 13, fontWeight: 600, color: C.label2, marginRight: 1 } }, balCur),
               fmtMoney(balInfo.total_balance),
@@ -972,6 +985,17 @@ function TokenMeterPanel(props) {
           React.createElement('span', { key: 'r', style: { fontSize: 12, color: C.label3, lineHeight: 1 } }, '⟳'),
           ]),
         ]),
+        balLow
+          ? React.createElement('div', {
+            key: 'lowbal',
+            onClick: () => { try { window.open(data.billingUrl || 'https://platform.deepseek.com/usage', '_blank', 'noopener'); } catch { /* 打不开就算了 */ } },
+            title: t('lowBalanceHint'),
+            style: {
+              flex: '1 1 100%', marginTop: 6, fontSize: 11, cursor: 'pointer', userSelect: 'none',
+              color: balLowColor, opacity: 0.9,
+            },
+          }, `⚠ ${t('lowBalance')} ¥${fmtMoney(lowAlert)} · ${t('rechargeHint')} ↗`)
+          : null,
         React.createElement('div', { key: 'f', style: { flex: '1 1 100%', fontSize: 11.5, color: C.label3, lineHeight: 1.7 } }, [
           (() => {
             const off = data.official;
@@ -1050,7 +1074,7 @@ function TokenMeterPanel(props) {
       ]),
       React.createElement('div', {
         key: 'stats',
-        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
+        style: { ...S.panel, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignContent: 'start' },
       }, [
         React.createElement(Stat, { key: '1', t, surface: S.stat, label: t('hitInput'), color: C.hit, value: fmt(D.hit) }),
         React.createElement(Stat, {
