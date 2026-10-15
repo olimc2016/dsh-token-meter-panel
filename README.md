@@ -92,7 +92,11 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 > | 包名 | 说明 |
 > |---|---|
 > | [`dsh-token-meter-panel`](https://www.npmjs.com/package/dsh-token-meter-panel) | 主力包（本仓库名） |
-> | [`dsh-token-mb`](https://www.npmjs.com/package/dsh-token-mb) | 短名孪生包，由 `npm run twin` 从同一份源码生成 —— **npm 上以这个包名发布**（`dsh plugin add dsh-token-mb`）；主力包名暂时只提供 GitHub tag 安装 |
+> | [`dsh-token-mb`](https://www.npmjs.com/package/dsh-token-mb) | 短名孪生包，由 `npm run twin` 从同一份源码生成 —— **npm 上的发行名**（`dsh plugin --profile desktop add dsh-token-mb`） |
+>
+> ⚠️ **npm 上的 `dsh-token-meter-panel` 停在 0.6.4**：该包名的 npm 所有者账号已无法访问（2FA 丢失、账号不可恢复），
+> 因此主力包名**不再发布新版本**。已装 0.6.4 的用户不受影响 —— 本插件的自动更新对主力包名走 `github:…#vX`，仍可升级；
+> 新用户请直接安装 **`dsh-token-mb`**（同一份代码）。
 >
 > 两个包的插槽行 id、webServer 路由前缀、设置命名空间、浏览器侧 slot id 全部独立，
 > 所以**同时装两个也不会冲突**（会看到两个「Token」面板）。日常只需装一个。
