@@ -302,6 +302,20 @@ npm run watch    # watch 模式，配合 DSH client-hmr 可自动热替换
 > `npm test` 在**任何平台、任何机器**上都能跑：需要会话日志的自检找不到日志时自动跳过，
 > 不依赖任何人的本机路径。CI（[`.github/workflows/test.yml`](.github/workflows/test.yml)）
 > 会在 ubuntu 与 windows 两套 runner 上各跑一遍，防止再出现「只在我这台机器上成立」的假设。
+### 本机开发常踩的三个坑（都会让构建「静默失败」）
+
+1. **pnpm 的 registry 可能是镜像**（本机实测指向 `https://repo.harmonyos.com/npm/`）：装 `esbuild` 等包会报
+   `is not in the npm registry / No authorization header was set`。装包时显式指定官方源：
+
+   ```bash
+   pnpm add -D <包名> --registry=https://registry.npmjs.org/
+   ```
+2. **esbuild 不要装在 `/tmp`**：macOS 会清理 `/tmp`，软链悬空后 `npm run build` 报错、而**烟测仍在测旧产物**
+   （看起来"全绿"，其实没测到新代码）。现在统一放在持久目录 `~/.dsh/tools/esb`，`npm run setup` 会自动链接它。
+   > 如果你改了源码但自检结果"和以前一模一样"，先 `npm run setup && npm run build` 再重试。
+3. **`pnpm add/install` 会清掉手工建的 `@deepseek-ai/*` 链接**（`schemastery` / `dsh-home-paths` 来自 DSH 本体）→
+   装完包必须再跑一次 `npm run setup`，否则 `verify-rates` 之类会报「设置 schema 加载失败」。
+
 ### 改界面时的自查（不用装/不用重启 DSH）
 
 ```bash
