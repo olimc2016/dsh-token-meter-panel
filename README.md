@@ -58,6 +58,20 @@ DSH 会把每次模型调用的 token 用量记在会话日志里，但**只记 
 
 ![面板预览](docs/preview-dark.png)
 
+### 界面预览
+
+<table>
+<tr>
+<td width="50%"><img src="docs/promo-overview.png" alt="主面板：今日消费、成本构成、峰谷价与每日趋势"></td>
+<td width="50%"><img src="docs/promo-history.png" alt="历史按天、今日成本构成与按会话明细"></td>
+</tr>
+<tr>
+<td align="center"><sub>主面板：今日消费 / 构成 / 峰谷价 / 趋势 / 分时</sub></td>
+<td align="center"><sub>历史（按天）· 今日成本构成 · 今日按会话明细</sub></td>
+</tr>
+</table>
+
+
 ---
 
 ## 功能

@@ -60,6 +60,20 @@ This plugin turns usage into what you actually care about:
 
 ![Panel preview](docs/preview-dark.png)
 
+### Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/promo-overview.png" alt="Dashboard: today's spend, composition, peak/off-peak pricing and daily trend"></td>
+<td width="50%"><img src="docs/promo-history.png" alt="Daily history, today's cost breakdown and per-session detail"></td>
+</tr>
+<tr>
+<td align="center"><sub>Dashboard: today / composition / pricing / trend / hourly</sub></td>
+<td align="center"><sub>Daily history · today's cost breakdown · per-session detail</sub></td>
+</tr>
+</table>
+
+
 ---
 
 ## Features
