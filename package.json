@@ -1,6 +1,6 @@
 {
     "name":  "dsh-token-meter-panel",
-    "version":  "0.6.6",
+    "version":  "0.6.7",
     "description":  "DSH Token 用量 / 花费 / 余额面板（社区插件，非官方）：兼容 DSH 0.2.x，零外部依赖（无需 zstd/zstdcat/Homebrew）· 账户余额走 DeepSeek 账号登录或 API Key · 峰谷分档计价 · 成本构成 · 按会话明细 · 预算告警。Community token usage, cost \u0026 balance panel for DeepSeek Harness.",
     "type":  "module",
     "main":  "lib/index.js",
@@ -15,7 +15,7 @@
     "files":  [
                   "lib",
                   "src",
-                  "docs",
+                  "docs/*.png",
                   "cordis.patch.yml",
                   "README.md",
                   "README.en.md",

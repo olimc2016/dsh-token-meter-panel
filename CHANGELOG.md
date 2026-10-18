@@ -1,5 +1,38 @@
 # 变更记录
 
+## 0.6.7 — 平台包依赖修复、发布物隐私面
+
+### 修复（重要）
+
+- **宿主平台包不再进 `dependencies`，避免在 profile 里装出第二份 `@deepseek-ai/dsh-*`**：
+  `@deepseek-ai/dsh-home-paths`、`@deepseek-ai/schemastery` 从 `dependencies` 移到
+  **optional `peerDependencies`**（并留在 `devDependencies` 供本仓库自检）。
+  运行时由宿主/DSH 提供，插件不再自带副本。
+  此前 `pnpm` 会把 `dependencies` 真装进 profile，而 DSH 的 profile resolution 对「profile 层发出的
+  bare import」优先选本层副本 —— 第二份平台包会盖住宿主那份，required 条目跟着激活失败，
+  十几个等 services 的插件一起挂，**DSH 桌面版启动失败**（兼容性闸门会 disable 掉宿主自己的
+  `tools` / `storage-domain` 行）。
+- **`@deepseek-ai/cordis` 等 peer 一并标 optional**：非可选 peer 会被 npm / pnpm 自动装进 profile，
+  同样会造出第二份。
+- **源码保持函数内动态 `import()` + 降级**：宿主半侧顶层没有静态 bare import，加载期失败不会拖垮插件；
+  `schemastery` / `dsh-home-paths` 只在用到时动态取，取不到就走降级路径。
+
+### 工程（新增防线）
+
+- [tools/verify-twin.mjs](tools/verify-twin.mjs) 增加发布清单检查，并带反向自检（改坏清单必须变红）：
+  - `dependencies` 里禁止出现任何 `@deepseek-ai/*`；
+  - 所有 `@deepseek-ai/*` peer 必须标 `optional`；
+  - 宿主半侧（`lib/index.js` + `src/*.mjs`）顶层禁止静态 bare import，
+    且运行期动态 import 的平台包集合必须与预期一致。
+
+### 发布物
+
+- **npm 包里不再包含内部审查报告**：`files` 从 `"docs"`（整目录）收窄为 `"docs/*.png"`，
+  只发 README 需要展示的截图；`reviews/`、`process/`、`specs/` 等
+  内部审查/过程材料不进包。根 `.npmignore` 对 `files` 列出的目录无效（实包验证过），
+  所以改的是 `files` 本身。
+- 孪生包 `dsh-token-mb` 版本随主包一致，同为 `0.6.7`。
+
 ## 0.6.6
 
 - 面板内直接改设置：预算与低余额提醒阈值可在面板上点击修改（写回 DSH 设置）。
@@ -36,7 +69,7 @@
 
 ### 工程
 
-- **自检脚本不再写死作者机器路径**（`C:/Users/oli20/...`、`F:/DSH/...`），新增
+- **自检脚本不再写死作者机器的个人路径**（Windows 用户目录 / 固定盘符），新增
   [tools/paths.mjs](tools/paths.mjs) 统一解析 `DSH_SESSIONS` → `DSH_HOME/sessions` → `~/.dsh/sessions`；
   没有会话日志时自动跳过而不是崩掉。
 - 新增跨平台 [tools/setup-modules.mjs](tools/setup-modules.mjs)（Windows junction / POSIX 符号链接），
