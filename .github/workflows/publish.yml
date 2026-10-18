@@ -46,9 +46,9 @@ jobs:
         run: |
           node tools/make-twin.mjs
           cd dist/dsh-token-mb
-          npm publish --provenance --access public
+          npm stage publish --provenance --access public
 
       # 主力包名：等 olimc2016 账号恢复、或把该账号加成维护者后即可发；现在失败不阻塞发版
       - name: Publish dsh-token-meter-panel (best effort)
         continue-on-error: true
-        run: npm publish --provenance --access public
+        run: npm stage publish --provenance --access public
