@@ -67,24 +67,34 @@
                                           ]
                            }
             },
-    "dependencies":  {
-                         "@deepseek-ai/dsh-home-paths":  "^0.2.0-rc.2",
-                         "@deepseek-ai/schemastery":  "^3.18.2"
-                     },
+    "dependencies":  {},
     "peerDependencies":  {
                              "@deepseek-ai/cordis":  "^4.0.2",
+                             "@deepseek-ai/dsh-home-paths":  "^0.2.0-rc.2",
                              "@deepseek-ai/dsh-settings":  "\u003e=0.1.0-rc.1 \u003c0.3.0-0",
-                             "@deepseek-ai/dsh-host-webserver":  "\u003e=0.1.0-rc.1 \u003c0.3.0-0"
+                             "@deepseek-ai/dsh-host-webserver":  "\u003e=0.1.0-rc.1 \u003c0.3.0-0",
+                             "@deepseek-ai/schemastery":  "^3.18.2"
                          },
     "peerDependenciesMeta":  {
+                                 "@deepseek-ai/cordis":  {
+                                                             "optional":  true
+                                                         },
+                                 "@deepseek-ai/dsh-home-paths":  {
+                                                                     "optional":  true
+                                                                 },
                                  "@deepseek-ai/dsh-settings":  {
                                                                    "optional":  true
                                                                },
                                  "@deepseek-ai/dsh-host-webserver":  {
                                                                          "optional":  true
-                                                                     }
+                                                                     },
+                                 "@deepseek-ai/schemastery":  {
+                                                                  "optional":  true
+                                                              }
                              },
     "devDependencies":  {
+                            "@deepseek-ai/dsh-home-paths":  "0.2.0-rc.2",
+                            "@deepseek-ai/schemastery":  "3.18.4",
                             "esbuild":  "^0.28.2"
                         },
     "scripts":  {
