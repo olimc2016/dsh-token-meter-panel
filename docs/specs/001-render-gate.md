@@ -1,7 +1,7 @@
 # Spec: 给面板补"渲染期异常"闸门（白屏回归）
 
 - 日期：2026-10-18 / 作者：lead / 关联 commit：待定
-- 状态：draft（等确认后改 approved → 实现）
+- 状态：**done**（2026-10-18 实现并验证通过）
 
 ## 1. 背景与目标
 0.6.6 之前出过一次**整面板白屏**：趋势图轴标签的 `map` 回调里用了 `index`，但那个 `map` 没声明该参数 → 数据到手、渲染到图表分支时抛 `ReferenceError`。
@@ -41,7 +41,10 @@
 - [ ] T4 `npm test` 全绿（AC1/AC4/AC5），提交
 - [ ] T5（可选 P1）把反向验证脚本化为 `tools/mutate-check.mjs`，以后一键跑
 
-## 7. 验证记录（完成后填）
-- 自检：
-- 反向验证：
-- 真机/预览：
+## 7. 验证记录（已完成）
+- 实现：新增 `tools/smoke-render.mjs`（独立测试：求值前装好"有数据"的 useState → 遍历函数组件树上限 297 节点），已接入 `npm test`。
+- 自检：全套 **9/9** 通过（新增 smoke-render）。
+- **反向验证（AC2）**：`sed` 去掉轴标签 `trend_.map(({ key, entry }, index)` 的 `, index` → `npm run build` → `node tools/smoke-render.mjs` **退出码 1**，堆栈指向 `Array.map → TokenMeterPanel`；恢复源码后重新通过 ✅
+- 覆盖度（AC3）：297 个节点（阈值 >200）。
+- 离线/可移植（AC4）：不联网、不依赖个人路径。
+- 备注：此前的两次失败尝试（在既有 `smoke-client` 里后置注入）被证伪——**注入必须发生在 bundle 求值之前**，并放在独立文件里（单一职责）。
