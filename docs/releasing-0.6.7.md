@@ -14,7 +14,7 @@
 | 修法 | `package.json` 的 `files` 由 `"docs"` 收窄为 `"docs/*.png"`（根 `.npmignore` 实测无效） |
 | 孪生包版本 | `0.6.7`，由 `tools/make-twin.mjs` 从主包 `package.json` 读取，未手改 `dist/` |
 | 9 项 test + build | 全部退出码 0（含 `env -i` 干净环境复跑） |
-| CI | `test` 双平台成功；`publish` 在 `npm publish dsh-token-mb` 步骤失败，npm 上仍是 0.6.6，**需 Lead 处理 Trusted Publisher 后重跑** |
+| CI | `test` 双平台成功；`publish` 两次都失败在 `npm publish` 步骤。已确认并修掉一个本地可复现的阻塞点（孪生包 `prepublishOnly` 递归），剩余缺口在 npm 侧授权；npm 上仍是 0.6.6，**需 Lead 处理 Trusted Publisher 后重跑** |
 | staged id | **无**：workflow 是直接 `npm publish --provenance`，不是暂存发布 |
 
 ## 1. 发布物隐私面
@@ -120,8 +120,8 @@ package/src/zstd.mjs
 - token 形状（`sk-*`、`ghp_*`、`github_pat_*`、`npm_*`、`AKIA*`、JWT）：**无命中**
 - 内部报告文件名 / 路径：**无命中**
 - `package.json` 的 `author: "oli20"` 是公开作者元数据，保留
-- 历史 CHANGELOG 里原有一处作者本机路径（`C:/Users/...`、`F:/DSH/...`）已改为
-  「Windows 用户目录 / 固定盘符」的中性描述，不再出现具体家目录
+- 历史 CHANGELOG 里原有一处作者本机路径（Windows 用户目录 / 固定盘符）已改为中性描述，
+  不再出现具体家目录
 
 ## 2. 版本与孪生包一致性
 
@@ -171,15 +171,22 @@ PASS 主力包：宿主半侧顶层无静态 bare import: []
 PASS 主力包：运行期动态 import 的平台包集合: ["@deepseek-ai/dsh-home-paths","@deepseek-ai/schemastery"]
 PASS 反向自检：把 dsh-home-paths 塞回 dependencies 会被抓住: true
 PASS 反向自检：把 schemastery 从 peer 移走会被抓住: true
+PASS 孪生包不带 prepublishOnly（避免发布时递归自检）: false
 PASS 孪生包：平台包声明合规: []
 ✅ verify-twin: 全部通过
 ```
 
+上述全套在提交 `00b8cb3`（孪生包 `prepublishOnly` 修复）之后又跑了一遍：
+build 0，9 个脚本全部 0；干净环境同样全部 0。
+
 ## 4. 提交、tag 与 CI
 
-- 提交：`chore(release): 0.6.7（发布物移除内部审查报告）`，包含
-  `package.json`、`CHANGELOG.md`、本文件
-- tag：`v0.6.7`，已推送
+- 提交：
+  - `8e549fd` `chore(release): 0.6.7（发布物移除内部审查报告）`（版本 + CHANGELOG + 本文件）
+  - `724dca9` `docs: 记录 0.6.7 publish CI 失败与后续动作`（报告更新）
+  - `00b8cb3` `fix(release): 孪生包移除 prepublishOnly，避免发布时递归自检失败`
+- tag：`v0.6.7`（annotated），因第一次 CI 失败且 npm 上没有任何 0.6.7 产物，
+  已把 tag 移到最终提交 `00b8cb3` 并 force-push 重触发；`v0.6.7` 与 `package.json` 版本一致。
 - `.github/workflows/publish.yml` 行为：
   - 触发：`push` tag `v*` + `workflow_dispatch`（**tag 触发**）
   - 发布方式：**直接发布**，不是暂存
@@ -193,10 +200,11 @@ PASS 孪生包：平台包声明合规: []
 
 | workflow | run | 结果 |
 |---|---|---|
-| `test`（main / `8e549fd`） | [39136684463](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39136684463) | ✅ success（ubuntu-latest + windows-latest 都过） |
-| `publish`（tag `v0.6.7` / `8e549fd`） | [39136687186](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39136687186) | ❌ failure |
+| `test`（main / `00b8cb3`） | [39137194803](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39137194803) | ✅ success（ubuntu-latest + windows-latest 都过） |
+| `publish` 第一次（tag `v0.6.7` / `8e549fd`） | [39136687186](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39136687186) | ❌ failure |
+| `publish` 第二次（tag `v0.6.7` / `00b8cb3`） | [39137197607](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39137197607) | ❌ failure |
 
-`publish` 的步骤级结果（公开 REST 查询）：
+两次 `publish` 的步骤级结果相同（公开 REST 查询）：
 
 ```
 1 Set up job                              success
@@ -208,31 +216,64 @@ PASS 孪生包：平台包声明合规: []
 7 Publish dsh-token-meter-panel           skipped
 ```
 
-- `https://registry.npmjs.org/dsh-token-mb/latest` 仍返回 **0.6.6** → 0.6.7 没有发出去。
-- 失败发生在 `npm publish`，前面的 `make-twin` / 测试都过了。
-- 日志下载被 GitHub 拒绝：`403 Must have admin rights to Repository`（本机没有 `gh`，
-  环境里也没有 `GITHUB_TOKEN` / `GH_TOKEN`，无法用 token 取 job log）。
-  因此**具体报错文本未确认**；按 workflow 里自带的注释，最可能是
-  `dsh-token-mb` 这个包名的 **Trusted Publisher 还没绑定**
-  （workflow 注释原话：npm 侧 Trusted Publisher 还没绑定）。
-- 已推的 `test` workflow 全绿，说明代码/测试本身没问题，缺口在 npm 侧授权。
+- `https://registry.npmjs.org/dsh-token-mb/latest` 两次之后都仍是 **0.6.6** → 0.6.7 没有发出去。
+- 失败发生在 `npm publish` 步骤，前面的 `make-twin` / 测试都过了。
+- job log 下载被 GitHub 拒绝：`403 Must have admin rights to Repository`
+  （本机没有 `gh`，环境里也没有 `GITHUB_TOKEN` / `GH_TOKEN`，拿不到 token 日志）。
+  页面 annotation 只有 `Process completed with exit code 1.`，**具体 npm 报错文本未确认**。
 
-### 4.2 需要 Lead / 用户做
+### 4.1.1 已确认并修掉一个阻塞点：孪生包的 `prepublishOnly` 递归
 
-1. 打开 `https://www.npmjs.com/package/dsh-token-mb/access` → Trusted Publisher → GitHub Actions，
+`npm publish` 在 `dist/dsh-token-mb` 里执行时会先跑该目录 `package.json` 的 `prepublishOnly`
+（原为 `npm run build && npm test`）。本地按同样顺序复跑，`verify-twin` 稳定 4 项红：
+
+```
+FAIL 与主力包名不同: true (expect false)
+FAIL 插槽行 id 不同: true (expect false)
+FAIL 宿主插件 id 不同: true (expect false)
+FAIL 客户端 bundle 的包 id 不同: false (expect true)
+❌ verify-twin: 4 项失败
+```
+
+原因：孪生包目录里的 `verify-twin` 会再生成一层
+`dist/dsh-token-mb/dist/dsh-token-mb`，然后拿「孪生包」当「主力包」做身份对比。
+
+修法（最小改动）：
+
+- `tools/make-twin.mjs`：生成孪生包时 `delete pkg.scripts.prepublishOnly`；
+  根目录发布仍保留 `prepublishOnly`，孪生包由根目录 `npm test` 覆盖。
+- `tools/verify-twin.mjs`：新增断言「孪生包不带 `prepublishOnly`」，
+  防止以后从主包复制脚本时又把这个坑带回来。
+- 修后根目录 build + 9 项测试全绿（含干净环境），孪生包 `npm pack` 为 0.6.7、无 `prepublishOnly`。
+
+第二次 CI 仍失败，说明 `prepublishOnly` 只是**其中一个**阻塞点，不是全部原因。
+
+### 4.2 剩余失败：npm 侧授权，需要 Lead
+
+`prepublishOnly` 已排除后，失败只可能来自 `npm publish` 本身（OIDC 鉴权 / 包权限）。按 workflow
+自带的注释，最可能是 `dsh-token-mb` 的 **Trusted Publisher 还没绑定**。另外公开 registry 元数据显示
+该包维护者账号是 `olimc2026`，绑定操作需要用有权限的账号登录 npm。
+
+需要用户 / Lead：
+
+1. 用 npm 包维护者账号打开 `https://www.npmjs.com/package/dsh-token-mb/access`
+   → Trusted Publisher → GitHub Actions：
    Organization/user `olimc2016`、Repository `dsh-token-meter-panel`、
    Workflow filename `publish.yml`、Environment 留空。
-2. 绑定后到 Actions 页面 **Re-run** 这次 `publish` run（或手动 `workflow_dispatch`）；
-   不需要重新打 tag（`v0.6.7` 已指向发布提交 `8e549fd`）。
-3. 若 npm 侧提示包已被占用/无权限，再确认 `dsh-token-mb` 的维护者是否包含当前 GitHub 身份。
+2. 绑定后到 Actions 页面 **Re-run failed jobs** 这次 run
+   （[39137197607](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39137197607)），
+   它已经跑在修好的 `00b8cb3` 上，**不需要再改版本或重新打 tag**。
+3. 若仍失败，请用有 admin 权限的 token 取日志定位：
+   `gh run view 39137197607 --log`（本机做不了，缺 `gh` + token）。
 4. 主力包 `dsh-token-meter-panel` 的 npm 账号仍不可访问，该步骤是 best-effort，可忽略。
 
 ## 5. 未做 / 不确定
 
 1. **未替用户批准任何 npm 暂存项**（本 workflow 也不是暂存发布）。
-2. `dsh-token-mb` 的 npm Trusted Publisher 绑定状态本机无法确认；CI 的 `npm publish`
-   确实已失败，但 job log 需要 admin 权限，**具体报错文本未拿到**。按 workflow 自带注释，
-   最可能是 Trusted Publisher 未绑定（见 §4.2）。
+2. `dsh-token-mb` 的 npm Trusted Publisher 绑定状态本机无法确认；两次 CI 的 `npm publish`
+   都失败，job log 需要 admin 权限，**具体报错文本未拿到**。已修掉本地可复现的
+   `prepublishOnly` 递归阻塞（见 §4.1.1），剩余按 workflow 注释最可能是 Trusted Publisher 未绑定。
+   0.6.7 目前**尚未发布**到 npm（latest 仍是 0.6.6）。
 3. 主力包 `dsh-token-meter-panel` 的发布步骤是 best-effort，失败不阻塞孪生包；
    本次修好的隐私面主要影响这个包的 tarball。
 4. 孪生包沿用原有行为：`make-twin.mjs` 不复制 `docs/`，其 npm 页面上的 README 截图
