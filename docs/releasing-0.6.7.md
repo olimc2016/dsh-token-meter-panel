@@ -14,7 +14,7 @@
 | 修法 | `package.json` 的 `files` 由 `"docs"` 收窄为 `"docs/*.png"`（根 `.npmignore` 实测无效） |
 | 孪生包版本 | `0.6.7`，由 `tools/make-twin.mjs` 从主包 `package.json` 读取，未手改 `dist/` |
 | 9 项 test + build | 全部退出码 0（含 `env -i` 干净环境复跑） |
-| CI | 已推 tag `v0.6.7` 触发；本机无 `gh`、无 `GITHUB_TOKEN`，**CI 结果需 Lead 用 token 盯** |
+| CI | `test` 双平台成功；`publish` 在 `npm publish dsh-token-mb` 步骤失败，npm 上仍是 0.6.6，**需 Lead 处理 Trusted Publisher 后重跑** |
 | staged id | **无**：workflow 是直接 `npm publish --provenance`，不是暂存发布 |
 
 ## 1. 发布物隐私面
@@ -188,14 +188,51 @@ PASS 孪生包：平台包声明合规: []
       （该包名在 npm 上冻结在 0.6.4，账号不可访问）
   - 鉴权：OIDC Trusted Publishing（`id-token: write`），无需 token
 - 因此**没有 staged id**；暂存批准这一步不存在。
-- CI 状态：本机无 `gh` 命令，环境里也没有 `GITHUB_TOKEN` / `GH_TOKEN`，
-  无法查询 run 结果 —— **需要 Lead 用 token 盯 `v0.6.7` 的 publish run**。
+
+### 4.1 CI 实际结果
+
+| workflow | run | 结果 |
+|---|---|---|
+| `test`（main / `8e549fd`） | [39136684463](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39136684463) | ✅ success（ubuntu-latest + windows-latest 都过） |
+| `publish`（tag `v0.6.7` / `8e549fd`） | [39136687186](https://github.com/olimc2016/dsh-token-meter-panel/actions/runs/39136687186) | ❌ failure |
+
+`publish` 的步骤级结果（公开 REST 查询）：
+
+```
+1 Set up job                              success
+2 actions/checkout@v4                     success
+3 actions/setup-node@v4                   success
+4 Install dev deps                        success
+5 Test                                    success
+6 Publish dsh-token-mb (with provenance)  FAILURE
+7 Publish dsh-token-meter-panel           skipped
+```
+
+- `https://registry.npmjs.org/dsh-token-mb/latest` 仍返回 **0.6.6** → 0.6.7 没有发出去。
+- 失败发生在 `npm publish`，前面的 `make-twin` / 测试都过了。
+- 日志下载被 GitHub 拒绝：`403 Must have admin rights to Repository`（本机没有 `gh`，
+  环境里也没有 `GITHUB_TOKEN` / `GH_TOKEN`，无法用 token 取 job log）。
+  因此**具体报错文本未确认**；按 workflow 里自带的注释，最可能是
+  `dsh-token-mb` 这个包名的 **Trusted Publisher 还没绑定**
+  （workflow 注释原话：npm 侧 Trusted Publisher 还没绑定）。
+- 已推的 `test` workflow 全绿，说明代码/测试本身没问题，缺口在 npm 侧授权。
+
+### 4.2 需要 Lead / 用户做
+
+1. 打开 `https://www.npmjs.com/package/dsh-token-mb/access` → Trusted Publisher → GitHub Actions，
+   Organization/user `olimc2016`、Repository `dsh-token-meter-panel`、
+   Workflow filename `publish.yml`、Environment 留空。
+2. 绑定后到 Actions 页面 **Re-run** 这次 `publish` run（或手动 `workflow_dispatch`）；
+   不需要重新打 tag（`v0.6.7` 已指向发布提交 `8e549fd`）。
+3. 若 npm 侧提示包已被占用/无权限，再确认 `dsh-token-mb` 的维护者是否包含当前 GitHub 身份。
+4. 主力包 `dsh-token-meter-panel` 的 npm 账号仍不可访问，该步骤是 best-effort，可忽略。
 
 ## 5. 未做 / 不确定
 
 1. **未替用户批准任何 npm 暂存项**（本 workflow 也不是暂存发布）。
-2. `dsh-token-mb` 的 npm Trusted Publisher 绑定状态本机无法确认；若未绑定，
-   CI 的 `npm publish` 会失败。以 CI 实际结果为准。
+2. `dsh-token-mb` 的 npm Trusted Publisher 绑定状态本机无法确认；CI 的 `npm publish`
+   确实已失败，但 job log 需要 admin 权限，**具体报错文本未拿到**。按 workflow 自带注释，
+   最可能是 Trusted Publisher 未绑定（见 §4.2）。
 3. 主力包 `dsh-token-meter-panel` 的发布步骤是 best-effort，失败不阻塞孪生包；
    本次修好的隐私面主要影响这个包的 tarball。
 4. 孪生包沿用原有行为：`make-twin.mjs` 不复制 `docs/`，其 npm 页面上的 README 截图
