@@ -28,8 +28,6 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: 用最新 npm（stage publish 需要 npm >= 11.5）
-        run: npm install -g npm@latest
 
       - uses: actions/checkout@v4
 
@@ -38,6 +36,8 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: 用最新 npm（stage publish 需要 npm >= 11.5）
+        run: npm install -g npm@latest
       - name: Install dev deps
         run: npm install --ignore-scripts --no-audit --no-fund
 
