@@ -28,6 +28,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: 用最新 npm（stage publish 需要 npm >= 11.5）
+        run: npm install -g npm@latest
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
