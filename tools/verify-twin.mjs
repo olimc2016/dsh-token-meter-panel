@@ -141,6 +141,9 @@ check('孪生包名', twinPkg.name, TWIN_NAME);
 check('与主力包名不同', twinPkg.name === canonPkg.name, false);
 check('版本与主力包一致', twinPkg.version, canonPkg.version);
 check('依赖与主力包一致', JSON.stringify(twinPkg.dependencies), JSON.stringify(canonPkg.dependencies));
+// 孪生包在 dist 里被 `npm publish` 时不能带 prepublishOnly：
+// 那会在发布目录里再跑一遍全套测试，verify-twin 递归生成下一层孪生包后按主力包身份断言失败。
+check('孪生包不带 prepublishOnly（避免发布时递归自检）', Object.hasOwn(twinPkg.scripts ?? {}, 'prepublishOnly'), false);
 checkPlatformHygiene('孪生包', twinPkg, OUT);
 
 console.log('-- 3) 各标识互不冲突');

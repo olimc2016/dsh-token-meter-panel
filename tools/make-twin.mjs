@@ -46,6 +46,11 @@ export function makeTwin() {
     '（社区插件，非官方）',
     `（社区插件，非官方；即 dsh-token-meter-panel 的短名孪生包，二者代码相同，可同时安装）`,
   );
+  // 发布在 dist/dsh-token-mb 里执行 `npm publish` 时，npm 会先跑 prepublishOnly。
+  // 孪生包不是「主力包」，在里面再跑一遍 npm test 会让 verify-twin 递归生成
+  // dist/dsh-token-mb/dist/dsh-token-mb，并按主力包身份断言失败（4 项红），
+  // 直接卡住发布。根目录发布仍保留 prepublishOnly；孪生包由根目录测试覆盖。
+  delete pkg.scripts?.prepublishOnly;
   writeFileSync(join(OUT, 'package.json'), `${JSON.stringify(pkg, null, 4)}\n`);
 
   // 插槽补丁：行 id 与模块名都换成孪生包自己的

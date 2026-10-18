@@ -24,6 +24,10 @@
   - 所有 `@deepseek-ai/*` peer 必须标 `optional`；
   - 宿主半侧（`lib/index.js` + `src/*.mjs`）顶层禁止静态 bare import，
     且运行期动态 import 的平台包集合必须与预期一致。
+- [tools/make-twin.mjs](tools/make-twin.mjs) 生成孪生包时删除 `prepublishOnly`：
+  `npm publish dist/dsh-token-mb` 会先跑它，在发布目录里再跑一遍全套测试，
+  而 `verify-twin` 会递归生成下一层孪生包并按「主力包」身份断言失败，直接卡住发布。
+  根目录发布仍保留 `prepublishOnly`，孪生包由根目录的 `npm test` 覆盖。
 
 ### 发布物
 
